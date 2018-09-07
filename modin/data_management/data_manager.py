@@ -1187,16 +1187,17 @@ class PandasDataManager(object):
 
         for i, column in enumerate(columns):
             dtype = col_dtypes[column]
-            if dtype in dtype_indices.keys():
-                dtype_indices[dtype].append(numeric_indices[i])
-            else:
-                dtype_indices[dtype] = [numeric_indices[i]]
-            new_dtype = np.dtype(dtype)
-            if dtype != np.int32 and new_dtype == np.int32:
-                new_dtype = np.dtype('int64')
-            elif dtype != np.float32 and new_dtype == np.float32:
-                new_dtype = np.dtype('float64')
-            new_dtypes[column] = new_dtype
+            if dtype != self.dtypes[column]:
+                if dtype in dtype_indices.keys():
+                    dtype_indices[dtype].append(numeric_indices[i])
+                else:
+                    dtype_indices[dtype] = [numeric_indices[i]]
+                new_dtype = np.dtype(dtype)
+                if dtype != np.int32 and new_dtype == np.int32:
+                    new_dtype = np.dtype('int64')
+                elif dtype != np.float32 and new_dtype == np.float32:
+                    new_dtype = np.dtype('float64')
+                new_dtypes[column] = new_dtype
 
         for dtype in dtype_indices.keys():
 
@@ -1328,7 +1329,7 @@ class RayPandasDataManager(PandasDataManager):
     @classmethod
     def _from_old_block_partitions(cls, blocks, index, columns):
         blocks = np.array([[RayRemotePartition(obj) for obj in row] for row in blocks])
-        return PandasDataManager(RayBlockPartitions(blocks), index, columns)
+        return PandasDataManager(RayBlockPartitions(blocks), index, columns, None)
 
 
 def pandas_index_extraction(df, axis):
