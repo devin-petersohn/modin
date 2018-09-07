@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 import pandas
+
 from pandas.compat import string_types
 from pandas.core.dtypes.cast import find_common_type
 from pandas.core.dtypes.common import (_get_dtype_from_object, is_list_like)
@@ -193,7 +194,7 @@ class PandasDataManager(object):
         new_data = new_self.concat(0, to_append)
         new_index = self.index.append(other.index) if not ignore_index else pandas.RangeIndex(len(self.index) + len(other.index))
 
-        return cls(new_data, new_index, joined_columns)
+        return cls(new_data, new_index, joined_columns, None)
 
     def _append_list_of_managers(self, others, ignore_index):
         assert isinstance(others, list), \
@@ -210,7 +211,7 @@ class PandasDataManager(object):
         new_data = new_self.concat(0, to_append)
         new_index = self.index.append([other.index for other in others]) if not ignore_index else pandas.RangeIndex(len(self.index) + sum([len(other.index) for other in others]))
 
-        return cls(new_data, new_index, joined_columns)
+        return cls(new_data, new_index, joined_columns, None)
 
     def _join_data_manager(self, other, **kwargs):
         assert isinstance(other, type(self)), \
@@ -236,7 +237,7 @@ class PandasDataManager(object):
         other_proxy = pandas.DataFrame(columns=other.columns)
         new_columns = self_proxy.join(other_proxy, lsuffix=lsuffix, rsuffix=rsuffix).columns
 
-        return cls(new_data, joined_index, new_columns)
+        return cls(new_data, joined_index, new_columns, None)
 
     def _join_list_of_managers(self, others, **kwargs):
         assert isinstance(others, list), \
@@ -270,8 +271,8 @@ class PandasDataManager(object):
         others_proxy = [pandas.DataFrame(columns=other.columns) for other in others]
         new_columns = self_proxy.join(others_proxy, lsuffix=lsuffix, rsuffix=rsuffix).columns
 
-        return cls(new_data, joined_index, new_columns)
-    # END Append/Concat/Join
+        return cls(new_data, joined_index, new_columns, None)
+    # END Append/Concat/Join (Not Merge)
 
     # Inter-Data operations (e.g. add, sub)
     # These operations require two DataFrames and will change the shape of the
@@ -306,7 +307,7 @@ class PandasDataManager(object):
 
         new_data = reindexed_self.inter_data_operation(1, lambda l, r: inter_data_op_builder(l, r, self_cols, other_cols, func), reindexed_other)
 
-        return cls(new_data, joined_index, new_columns)
+        return cls(new_data, joined_index, new_columns, None)
 
     def _inter_df_op_handler(self, func, other, **kwargs):
         """Helper method for inter-DataFrame and scalar operations"""
@@ -354,7 +355,7 @@ class PandasDataManager(object):
             reindexed_cond = cond.reindex(axis, self.index if not axis else self.columns).data
 
             new_data = reindexed_self.inter_data_operation(axis, lambda l, r: where_builder_series(l, r, other, **kwargs), reindexed_cond)
-            return cls(new_data, self.index, self.columns)
+            return cls(new_data, self.index, self.columns, None)
 
     def update(self, other, **kwargs):
         assert isinstance(other, type(self)), \
@@ -480,7 +481,7 @@ class PandasDataManager(object):
             new_column_name = "index" if "index" not in self.columns else "level_0"
             new_columns = self.columns.insert(0, new_column_name)
             result = self.insert(0, new_column_name, self.index)
-            return cls(result.data, new_index, new_columns)
+            return cls(result.data, new_index, new_columns, None)
         else:
             # The copies here are to ensure that we do not give references to
             # this object for the purposes of updates.
@@ -504,7 +505,7 @@ class PandasDataManager(object):
         cls = type(self)
         new_data = self.data.transpose(*args, **kwargs)
         # Switch the index and columns and transpose the
-        new_manager = cls(new_data, self.columns, self.index)
+        new_manager = cls(new_data, self.columns, self.index, None)
         # It is possible that this is already transposed
         new_manager._is_transposed = self._is_transposed ^ 1
         return new_manager
@@ -829,6 +830,33 @@ class PandasDataManager(object):
         else:
             columns = columns_copy.columns
 
+        return cls(new_data, self.index, columns, None)
+
+    def eval(self, expr, **kwargs):
+        cls = type(self)
+        columns = self.columns
+
+        def eval_builder(df, **kwargs):
+            df.columns = columns
+            result = df.eval(expr, inplace=False, **kwargs)
+            # If result is a series, expr was not an assignment expression.
+            if not isinstance(result, pandas.Series):
+                result.columns = pandas.RangeIndex(0, len(result.columns))
+            return result
+
+        func = self._prepare_method(eval_builder, **kwargs)
+        new_data = self.map_across_full_axis(1, func)
+
+        # eval can update the columns, so we must update columns
+        columns_copy = pandas.DataFrame(columns=columns)
+        columns_copy = columns_copy.eval(expr, inplace=False, **kwargs)
+        if isinstance(columns_copy, pandas.Series):
+            # To create a data manager, we need the 
+            # columns to be in a list-like
+            columns = list(columns_copy.name)
+        else:
+            columns = columns_copy.columns
+
         return cls(new_data, self.index, columns)
 
     def quantile_for_list_of_values(self, **kwargs):
@@ -843,7 +871,7 @@ class PandasDataManager(object):
 
         new_data = self.map_across_full_axis(axis, func)
         new_columns = self.columns if not axis else self.index
-        return cls(new_data, q_index, new_columns)
+        return cls(new_data, q_index, new_columns, None)
 
     def _cumulative_builder(self, func, **kwargs):
         cls = type(self)
@@ -947,7 +975,7 @@ class PandasDataManager(object):
         else:
             func = self._prepare_method(pandas.DataFrame.fillna, **kwargs)
             new_data = self.map_across_full_axis(axis, func)
-            return cls(new_data, self.index, self.columns)
+            return cls(new_data, self.index, self.columns, None)
 
     def describe(self, **kwargs):
         cls = type(self)
@@ -957,8 +985,9 @@ class PandasDataManager(object):
         new_data = self.map_across_full_axis(axis, func)
         new_index = self.compute_index(0, new_data, False)
         new_columns = self.compute_index(1, new_data, True)
+        new_dtypes = pd.Series([np.float64 for _ in new_columns], index=new_columns)
 
-        return cls(new_data, new_index, new_columns)
+        return cls(new_data, new_index, new_columns, new_dtypes)
 
     def rank(self, **kwargs):
         cls = type(self)
@@ -974,7 +1003,7 @@ class PandasDataManager(object):
             new_columns = self.compute_index(1, new_data, True)
         else:
             new_columns = self.columns
-        new_dtypes = pandas.Series([np.float64 for _ in new_columns], index=new_columns)
+        new_dtypes = pd.Series([np.float64 for _ in new_columns], index=new_columns)
         return cls(new_data, self.index, new_columns, new_dtypes)
 
     def diff(self, **kwargs):
@@ -985,7 +1014,7 @@ class PandasDataManager(object):
         func = self._prepare_method(pandas.DataFrame.diff, **kwargs)
         new_data = self.map_across_full_axis(axis, func)
 
-        return cls(new_data, self.index, self.columns)
+        return cls(new_data, self.index, self.columns, None)
     # END Map across rows/columns
 
     # Head/Tail/Front/Back
@@ -1062,7 +1091,7 @@ class PandasDataManager(object):
         df.columns = pandas.RangeIndex(len(df.columns))
         new_data = block_partitions_cls.from_pandas(df)
 
-        return cls(new_data, new_index, new_columns, new_dtypes)
+        return cls(new_data, new_index, new_columns, dtypes=new_dtypes)
 
     # __getitem__ methods
     def getitem_single_key(self, key):
@@ -1143,8 +1172,9 @@ class PandasDataManager(object):
             # We can't use self.columns.drop with duplicate keys because in Pandas
             # it throws an error.
             new_columns = [self.columns[i] for i in range(len(self.columns)) if i not in numeric_indices]
-            new_dtypes = self.dtypes.drop(columns)
-
+            dtypes = dtypes.values
+            new_dtypes = pd.Series([dtypes[i] for i in range(len(dtypes)) if i not in numeric_indices])
+            new_dtypes.index = new_columns
         return cls(new_data, new_index, new_columns, new_dtypes)
     # END __delitem__ and drop
 
@@ -1163,13 +1193,7 @@ class PandasDataManager(object):
 
         new_data = self.data.apply_func_to_select_indices_along_full_axis(0, insert, loc, keep_remaining=True)
         new_columns = self.columns.insert(loc, column)
-
-        # Because a Pandas Series does not allow insert, we make a DataFrame
-        # and insert the new dtype that way.
-        temp_dtypes = pandas.DataFrame(self.dtypes).T
-        temp_dtypes.insert(loc, column, _get_dtype_from_object(value))
-        new_dtypes = temp_dtypes.iloc[0]
-
+        new_dtypes = self.dtypes.insert(loc, _get_dtype_from_object(value))
         return cls(new_data, self.index, new_columns, new_dtypes)
     # END Insert
 
@@ -1182,9 +1206,7 @@ class PandasDataManager(object):
         dtype_indices = dict()
         columns = col_dtypes.keys()
         new_dtypes = self.dtypes.copy()
-
         numeric_indices = list(self.columns.get_indexer_for(columns))
-
         for i, column in enumerate(columns):
             dtype = col_dtypes[column]
             if dtype != self.dtypes[column]:
@@ -1199,7 +1221,9 @@ class PandasDataManager(object):
                     new_dtype = np.dtype('float64')
                 new_dtypes[column] = new_dtype
 
+        new_data = self.data
         for dtype in dtype_indices.keys():
+            resulting_dtype = None
 
             def astype(df, internal_indices=[]):
                 block_dtypes = dict()
@@ -1209,7 +1233,7 @@ class PandasDataManager(object):
 
             new_data = self.data.apply_func_to_select_indices(0, astype, dtype_indices[dtype], keep_remaining=True)
 
-        return cls(self.data, self.index, self.columns, new_dtypes)
+        return cls(new_data, self.index, self.columns, new_dtypes)
     # END astype
 
     # UDF (apply and agg) methods
@@ -1249,7 +1273,7 @@ class PandasDataManager(object):
             series_result.index = index
             return series_result
 
-        return cls(result_data, index, columns)
+        return cls(result_data, index, columns, None)
 
     def _dict_func(self, func, axis, *args, **kwargs):
         if "axis" not in kwargs:
@@ -1303,7 +1327,6 @@ class PandasDataManager(object):
 
         func_prepared = self._prepare_method(lambda df: callable_apply_builder(df, func, axis, index, *args, **kwargs))
         result_data = self.map_across_full_axis(axis, func_prepared)
-
         return self._post_process_apply(result_data, axis)
     # END UDF
 

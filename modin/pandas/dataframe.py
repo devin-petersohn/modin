@@ -495,7 +495,7 @@ class DataFrame(object):
         Returns:
             A new DataFrame with the applied absolute value.
         """
-        for t in self.dtypes:
+        for t in self._data_manager.dtypes:
             if np.dtype('O') == t:
                 # TODO Give a more accurate error to Pandas
                 raise TypeError("bad operand type for abs():", "str")
@@ -1732,7 +1732,7 @@ class DataFrame(object):
             A Series with the index for each minimum value for the axis
                 specified.
         """
-        if not all(d != np.dtype('O') for d in self.dtypes):
+        if not all(d != np.dtype('O') for d in self._data_manager.dtypes):
             raise TypeError(
                 "reduction operation 'argmax' not allowed for this dtype")
 
@@ -1779,9 +1779,9 @@ class DataFrame(object):
         Returns:
             Prints the summary of a DataFrame and returns None.
         """
-        index = self.index
-        columns = self.columns
-        dtypes = self.dtypes
+        index = self._data_manager.index
+        columns = self._data_manager.columns
+        dtypes = self._data_manager.dtypes
 
         # Set up default values
         verbose = True if verbose is None else verbose
@@ -2655,20 +2655,20 @@ class DataFrame(object):
 
         if not numeric_only:
             # check if there are any object columns
-            if all(check_bad_dtype(t) for t in self.dtypes):
+            if all(check_bad_dtype(t) for t in self._data_manager.dtypes):
                 raise TypeError("can't multiply sequence by non-int of type "
                                 "'float'")
             else:
-                if next((True for t in self.dtypes if check_bad_dtype(t)),
+                if next((True for t in self._data_manager.dtypes if check_bad_dtype(t)),
                         False):
-                    dtype = next(t for t in self.dtypes if check_bad_dtype(t))
+                    dtype = next(t for t in self._data_manager.dtypes if check_bad_dtype(t))
                     raise ValueError("Cannot compare type '{}' with type '{}'"
                                      .format(type(dtype), float))
         else:
             # Normally pandas returns this near the end of the quantile, but we
             # can't afford the overhead of running the entire operation before
             # we error.
-            if all(check_bad_dtype(t) for t in self.dtypes):
+            if all(check_bad_dtype(t) for t in self._data_manager.dtypes):
                 raise ValueError("need at least one array to concatenate")
 
         # check that all qs are between 0 and 1
@@ -3037,10 +3037,10 @@ class DataFrame(object):
             else 0
 
         if axis == 0:
-            axis_labels = self.index
+            axis_labels = self._data_manager.index
             axis_length = len(axis_labels)
         else:
-            axis_labels = self.column
+            axis_labels = self._data_manager.column
             axis_length = len(axis_labels)
 
         if weights is not None:
@@ -3180,7 +3180,7 @@ class DataFrame(object):
             return column, functools.partial(issubclass, dtype.type)
 
         for column, f in itertools.starmap(is_dtype_instance_mapper,
-                                           self.dtypes.iteritems()):
+                                           self._data_manager.dtypes.iteritems()):
             if include:  # checks for the case of empty include or exclude
                 include_these[column] = any(map(f, include))
             if exclude:
@@ -4447,7 +4447,7 @@ class DataFrame(object):
         Returns:
             A modified DataFrame where every element is the negation of before
         """
-        for t in self.dtypes:
+        for t in self._data_manager.dtypes:
             if not (is_bool_dtype(t) or is_numeric_dtype(t)
                     or is_timedelta64_dtype(t)):
                 raise TypeError("Unary negative expects numeric dtype, not {}"
