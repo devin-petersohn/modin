@@ -231,4 +231,10 @@ def deploy_ray_func(func, partition, kwargs):
     Returns:
         The result of the function.
     """
-    return func(partition, **kwargs)
+    try:
+        return func(partition, **kwargs)
+    # Sometimes Arrow forces us to make a copy of an object before we operate
+    # on it. We don't want the error to propagate to the user, and we want to
+    # avoid copying unless we absolutely have to.
+    except ValueError:
+        return func(partition.copy(), **kwargs)
