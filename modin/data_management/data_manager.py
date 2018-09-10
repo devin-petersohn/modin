@@ -1153,9 +1153,7 @@ class PandasDataManager(object):
             # We can't use self.columns.drop with duplicate keys because in Pandas
             # it throws an error.
             new_columns = [self.columns[i] for i in range(len(self.columns)) if i not in numeric_indices]
-            dtypes = dtypes.values
-            new_dtypes = pandas.Series([dtypes[i] for i in range(len(dtypes)) if i not in numeric_indices])
-            new_dtypes.index = new_columns
+            new_dtypes = self.dtypes.drop(columns)
         return cls(new_data, new_index, new_columns, new_dtypes)
     # END __delitem__ and drop
 
@@ -1174,7 +1172,13 @@ class PandasDataManager(object):
 
         new_data = self.data.apply_func_to_select_indices_along_full_axis(0, insert, loc, keep_remaining=True)
         new_columns = self.columns.insert(loc, column)
-        new_dtypes = self.dtypes.insert(loc, _get_dtype_from_object(value))
+
+	# Because a Pandas Series does not allow insert, we make a DataFrame
+        # and insert the new dtype that way.
+        temp_dtypes = pandas.DataFrame(self.dtypes).T
+        temp_dtypes.insert(loc, column, _get_dtype_from_object(value))
+        new_dtypes = temp_dtypes.iloc[0]
+
         return cls(new_data, self.index, new_columns, new_dtypes)
     # END Insert
 
@@ -1187,7 +1191,9 @@ class PandasDataManager(object):
         dtype_indices = dict()
         columns = col_dtypes.keys()
         new_dtypes = self.dtypes.copy()
+
         numeric_indices = list(self.columns.get_indexer_for(columns))
+
         for i, column in enumerate(columns):
             dtype = col_dtypes[column]
             if dtype != self.dtypes[column]:
