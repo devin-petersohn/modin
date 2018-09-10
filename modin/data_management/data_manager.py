@@ -759,6 +759,14 @@ class PandasDataManager(object):
         func = self._prepare_method(pandas.DataFrame.std, **kwargs)
         return self.full_axis_reduce(func, axis)
 
+    def to_datetime(self, **kwargs):
+        columns = self.columns
+        def to_datetime_builder(df, **kwargs):
+            df.columns = columns
+            return pandas.to_datetime(df, **kwargs)
+        func = self._prepare_method(to_datetime_builder, **kwargs)
+        return self.full_axis_reduce(func, 1)
+
     def var(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
@@ -804,33 +812,6 @@ class PandasDataManager(object):
         new_index = self.compute_index(0, new_data, True)
 
         return cls(new_data, new_index, self.columns, self.dtypes)
-
-    def eval(self, expr, **kwargs):
-        cls = type(self)
-        columns = self.columns
-
-        def eval_builder(df, **kwargs):
-            df.columns = columns
-            result = df.eval(expr, inplace=False, **kwargs)
-            # If result is a series, expr was not an assignment expression.
-            if not isinstance(result, pandas.Series):
-                result.columns = pandas.RangeIndex(0, len(result.columns))
-            return result
-
-        func = self._prepare_method(eval_builder, **kwargs)
-        new_data = self.map_across_full_axis(1, func)
-
-        # eval can update the columns, so we must update columns
-        columns_copy = pandas.DataFrame(columns=columns)
-        columns_copy = columns_copy.eval(expr, inplace=False, **kwargs)
-        if isinstance(columns_copy, pandas.Series):
-            # To create a data manager, we need the 
-            # columns to be in a list-like
-            columns = list(columns_copy.name)
-        else:
-            columns = columns_copy.columns
-
-        return cls(new_data, self.index, columns, None)
 
     def eval(self, expr, **kwargs):
         cls = type(self)
@@ -1198,7 +1179,7 @@ class PandasDataManager(object):
     # END Insert
 
     # astype
-    # This method changes the types of select columns to the new dtype.
+    # This method change the dtypes of column(s)
     def astype(self, col_dtypes, errors='raise', **kwargs):
         cls = type(self)
 
@@ -1234,7 +1215,7 @@ class PandasDataManager(object):
             new_data = self.data.apply_func_to_select_indices(0, astype, dtype_indices[dtype], keep_remaining=True)
 
         return cls(new_data, self.index, self.columns, new_dtypes)
-    # END astype
+    # END type conversions
 
     # UDF (apply and agg) methods
     # There is a wide range of behaviors that are supported, so a lot of the
