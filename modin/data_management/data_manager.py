@@ -966,7 +966,7 @@ class PandasDataManager(object):
         new_data = self.map_across_full_axis(axis, func)
         new_index = self.compute_index(0, new_data, False)
         new_columns = self.compute_index(1, new_data, True)
-        new_dtypes = pd.Series([np.float64 for _ in new_columns], index=new_columns)
+        new_dtypes = pandas.Series([np.float64 for _ in new_columns], index=new_columns)
 
         return cls(new_data, new_index, new_columns, new_dtypes)
 
@@ -1154,7 +1154,7 @@ class PandasDataManager(object):
             # it throws an error.
             new_columns = [self.columns[i] for i in range(len(self.columns)) if i not in numeric_indices]
             dtypes = dtypes.values
-            new_dtypes = pd.Series([dtypes[i] for i in range(len(dtypes)) if i not in numeric_indices])
+            new_dtypes = pandas.Series([dtypes[i] for i in range(len(dtypes)) if i not in numeric_indices])
             new_dtypes.index = new_columns
         return cls(new_data, new_index, new_columns, new_dtypes)
     # END __delitem__ and drop
