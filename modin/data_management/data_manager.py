@@ -194,7 +194,7 @@ class PandasDataManager(object):
         new_data = new_self.concat(0, to_append)
         new_index = self.index.append(other.index) if not ignore_index else pandas.RangeIndex(len(self.index) + len(other.index))
 
-        return cls(new_data, new_index, joined_columns, None)
+        return cls(new_data, new_index, joined_columns)
 
     def _append_list_of_managers(self, others, ignore_index):
         assert isinstance(others, list), \
@@ -211,7 +211,7 @@ class PandasDataManager(object):
         new_data = new_self.concat(0, to_append)
         new_index = self.index.append([other.index for other in others]) if not ignore_index else pandas.RangeIndex(len(self.index) + sum([len(other.index) for other in others]))
 
-        return cls(new_data, new_index, joined_columns, None)
+        return cls(new_data, new_index, joined_columns)
 
     def _join_data_manager(self, other, **kwargs):
         assert isinstance(other, type(self)), \
@@ -237,7 +237,7 @@ class PandasDataManager(object):
         other_proxy = pandas.DataFrame(columns=other.columns)
         new_columns = self_proxy.join(other_proxy, lsuffix=lsuffix, rsuffix=rsuffix).columns
 
-        return cls(new_data, joined_index, new_columns, None)
+        return cls(new_data, joined_index, new_columns)
 
     def _join_list_of_managers(self, others, **kwargs):
         assert isinstance(others, list), \
@@ -271,8 +271,8 @@ class PandasDataManager(object):
         others_proxy = [pandas.DataFrame(columns=other.columns) for other in others]
         new_columns = self_proxy.join(others_proxy, lsuffix=lsuffix, rsuffix=rsuffix).columns
 
-        return cls(new_data, joined_index, new_columns, None)
-    # END Append/Concat/Join (Not Merge)
+        return cls(new_data, joined_index, new_columns)
+    # END Append/Concat/Join
 
     # Inter-Data operations (e.g. add, sub)
     # These operations require two DataFrames and will change the shape of the
@@ -307,7 +307,7 @@ class PandasDataManager(object):
 
         new_data = reindexed_self.inter_data_operation(1, lambda l, r: inter_data_op_builder(l, r, self_cols, other_cols, func), reindexed_other)
 
-        return cls(new_data, joined_index, new_columns, None)
+        return cls(new_data, joined_index, new_columns)
 
     def _inter_df_op_handler(self, func, other, **kwargs):
         """Helper method for inter-DataFrame and scalar operations"""
@@ -355,7 +355,7 @@ class PandasDataManager(object):
             reindexed_cond = cond.reindex(axis, self.index if not axis else self.columns).data
 
             new_data = reindexed_self.inter_data_operation(axis, lambda l, r: where_builder_series(l, r, other, **kwargs), reindexed_cond)
-            return cls(new_data, self.index, self.columns, None)
+            return cls(new_data, self.index, self.columns)
 
     def update(self, other, **kwargs):
         assert isinstance(other, type(self)), \
@@ -481,7 +481,7 @@ class PandasDataManager(object):
             new_column_name = "index" if "index" not in self.columns else "level_0"
             new_columns = self.columns.insert(0, new_column_name)
             result = self.insert(0, new_column_name, self.index)
-            return cls(result.data, new_index, new_columns, None)
+            return cls(result.data, new_index, new_columns)
         else:
             # The copies here are to ensure that we do not give references to
             # this object for the purposes of updates.
@@ -505,7 +505,7 @@ class PandasDataManager(object):
         cls = type(self)
         new_data = self.data.transpose(*args, **kwargs)
         # Switch the index and columns and transpose the
-        new_manager = cls(new_data, self.columns, self.index, None)
+        new_manager = cls(new_data, self.columns, self.index)
         # It is possible that this is already transposed
         new_manager._is_transposed = self._is_transposed ^ 1
         return new_manager
@@ -852,7 +852,7 @@ class PandasDataManager(object):
 
         new_data = self.map_across_full_axis(axis, func)
         new_columns = self.columns if not axis else self.index
-        return cls(new_data, q_index, new_columns, None)
+        return cls(new_data, q_index, new_columns)
 
     def _cumulative_builder(self, func, **kwargs):
         cls = type(self)
@@ -875,8 +875,8 @@ class PandasDataManager(object):
 
     def dropna(self, **kwargs):
         axis = kwargs.get("axis", 0)
-        subset = kwargs.get("subset", None)
-        thresh = kwargs.get("thresh", None)
+        subset = kwargs.get("subset")
+        thresh = kwargs.get("thresh")
         how = kwargs.get("how", "any")
         # We need to subset the axis that we care about with `subset`. This
         # will be used to determine the number of values that are NA.
@@ -939,7 +939,7 @@ class PandasDataManager(object):
         cls = type(self)
 
         axis = kwargs.get("axis", 0)
-        value = kwargs.pop("value", None)
+        value = kwargs.pop("value")
 
         if isinstance(value, dict):
             if axis == 0:
@@ -956,7 +956,7 @@ class PandasDataManager(object):
         else:
             func = self._prepare_method(pandas.DataFrame.fillna, **kwargs)
             new_data = self.map_across_full_axis(axis, func)
-            return cls(new_data, self.index, self.columns, None)
+            return cls(new_data, self.index, self.columns)
 
     def describe(self, **kwargs):
         cls = type(self)
@@ -984,7 +984,7 @@ class PandasDataManager(object):
             new_columns = self.compute_index(1, new_data, True)
         else:
             new_columns = self.columns
-        new_dtypes = pd.Series([np.float64 for _ in new_columns], index=new_columns)
+        new_dtypes = pandas.Series([np.float64 for _ in new_columns], index=new_columns)
         return cls(new_data, self.index, new_columns, new_dtypes)
 
     def diff(self, **kwargs):
@@ -995,7 +995,7 @@ class PandasDataManager(object):
         func = self._prepare_method(pandas.DataFrame.diff, **kwargs)
         new_data = self.map_across_full_axis(axis, func)
 
-        return cls(new_data, self.index, self.columns, None)
+        return cls(new_data, self.index, self.columns)
     # END Map across rows/columns
 
     # Head/Tail/Front/Back
@@ -1179,7 +1179,7 @@ class PandasDataManager(object):
     # END Insert
 
     # astype
-    # This method change the dtypes of column(s)
+    # This method changes the types of select columns to the new dtype.
     def astype(self, col_dtypes, errors='raise', **kwargs):
         cls = type(self)
 
@@ -1254,7 +1254,7 @@ class PandasDataManager(object):
             series_result.index = index
             return series_result
 
-        return cls(result_data, index, columns, None)
+        return cls(result_data, index, columns)
 
     def _dict_func(self, func, axis, *args, **kwargs):
         if "axis" not in kwargs:
