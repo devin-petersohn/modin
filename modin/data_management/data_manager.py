@@ -939,9 +939,11 @@ class PandasDataManager(object):
         cls = type(self)
 
         axis = kwargs.get("axis", 0)
-        value = kwargs.pop("value")
+        value = kwargs.get("value")
 
         if isinstance(value, dict):
+            value = kwargs.pop("value")
+
             if axis == 0:
                 index = self.columns
             else:

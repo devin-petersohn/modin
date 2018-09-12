@@ -14,7 +14,6 @@ from pandas.core.indexing import (check_bool_indexer, convert_to_index_sliceable
 from pandas.util._validators import validate_bool_kwarg
 
 import itertools
-import io
 import functools
 import numpy as np
 import ray
@@ -24,7 +23,7 @@ import warnings
 
 from .utils import (from_pandas, to_pandas, _blocks_to_col, _blocks_to_row,
                     _create_block_partitions, _fix_blocks_dimensions,
-                    _inherit_docstrings, _map_partitions)
+                    _inherit_docstrings)
 from ..data_management.data_manager import RayPandasDataManager
 from .index_metadata import _IndexMetadata
 from .iterator import PartitionIterator

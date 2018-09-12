@@ -4,10 +4,7 @@ from __future__ import print_function
 
 import pandas
 
-import ray
-
 from .dataframe import DataFrame
-from .utils import _map_partitions
 
 
 def to_datetime(arg,
