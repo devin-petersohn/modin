@@ -1120,30 +1120,28 @@ def test_assign():
 
 def test_astype():
     td = TestData()
-    ray_df = pd.DataFrame(td.frame)
-    our_df_casted = ray_df.astype(np.int32)
-    expected_df_casted = pandas.DataFrame(
-        td.frame.values.astype(np.int32),
+    ray_df = pd.DataFrame(td.frame.values,
+            index=td.frame.index,
+            columns=td.frame.columns)
+    expected_df = pandas.DataFrame(
+        td.frame.values,
         index=td.frame.index,
         columns=td.frame.columns)
 
-    assert ray_df_equals_pandas(our_df_casted, expected_df_casted)
+    ray_df_casted = ray_df.astype(np.int32)
+    expected_df_casted = expected_df.astype(np.int32)
 
-    our_df_casted = ray_df.astype(np.float64)
-    expected_df_casted = pandas.DataFrame(
-        td.frame.values.astype(np.float64),
-        index=td.frame.index,
-        columns=td.frame.columns)
+    assert ray_df_equals_pandas(ray_df_casted, expected_df_casted)
 
-    assert ray_df_equals_pandas(our_df_casted, expected_df_casted)
+    ray_df_casted = ray_df.astype(np.float64)
+    expected_df_casted = expected_df.astype(np.float64)
 
-    our_df_casted = ray_df.astype(str)
-    expected_df_casted = pandas.DataFrame(
-        td.frame.values.astype(str),
-        index=td.frame.index,
-        columns=td.frame.columns)
+    assert ray_df_equals_pandas(ray_df_casted, expected_df_casted)
 
-    assert ray_df_equals_pandas(our_df_casted, expected_df_casted)
+    ray_df_casted = ray_df.astype(str)
+    expected_df_casted = expected_df.astype(str)
+
+    assert ray_df_equals_pandas(ray_df_casted, expected_df_casted)
 
 
 def test_at_time():
