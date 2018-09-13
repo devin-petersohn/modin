@@ -820,30 +820,41 @@ class PandasDataManager(object):
 
     def eval(self, expr, **kwargs):
         cls = type(self)
-        columns = self.columns
+        inplace = kwargs.get("inplace", False)
+
+        columns = self.index if self._is_transposed else self.columns
+        index = self.columns if self._is_transposed else self.index
+
+        # Dun eval on columns to determine result type
+        columns_copy = pandas.DataFrame(columns=self.columns)
+        columns_copy = columns_copy.eval(expr, inplace=False, **kwargs)
+        expect_series = isinstance(columns_copy, pandas.Series)
+
+        # if there is no assignment, then we simply save the results 
+        # in the first column
+        if expect_series:
+            if inplace:
+                raise ValueError("Cannot operate inplace if there is no assignment")
+            else:
+                expr = "{0} = {1}".format(columns[0], expr)
 
         def eval_builder(df, **kwargs):
             df.columns = columns
             result = df.eval(expr, inplace=False, **kwargs)
-            # If result is a series, expr was not an assignment expression.
-            if not isinstance(result, pandas.Series):
-                result.columns = pandas.RangeIndex(0, len(result.columns))
+            result.columns = pandas.RangeIndex(0, len(result.columns))
             return result
 
         func = self._prepare_method(eval_builder, **kwargs)
         new_data = self.map_across_full_axis(1, func)
 
-        # eval can update the columns, so we must update columns
-        columns_copy = pandas.DataFrame(columns=columns)
-        columns_copy = columns_copy.eval(expr, inplace=False, **kwargs)
-        if isinstance(columns_copy, pandas.Series):
-            # To create a data manager, we need the 
-            # columns to be in a list-like
-            columns = list(columns_copy.name)
+        if expect_series:
+            result = new_data.to_pandas()[0]
+            result.name = columns_copy.name
+            result.index = index
+            return result
         else:
             columns = columns_copy.columns
-
-        return cls(new_data, self.index, columns)
+            return cls(new_data, self.index, columns)
 
     def quantile_for_list_of_values(self, **kwargs):
         cls = type(self)
