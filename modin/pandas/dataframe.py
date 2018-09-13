@@ -1344,12 +1344,15 @@ class DataFrame(object):
         self._validate_eval_query(expr, **kwargs)
         inplace = validate_bool_kwarg(inplace, "inplace")
 
-        data_manager = self._data_manager.eval(expr, **kwargs)
+        result = self._data_manager.eval(expr, **kwargs)
 
-        if inplace:
-            self._update_inplace(new_manager=data_manager)
+        if isinstance(result, pandas.Series):
+            return result
         else:
-            return DataFrame(data_manager=data_manager)
+            if inplace:
+                self._update_inplace(new_manager=result)
+            else:
+                return DataFrame(data_manager=result)
 
     def ewm(self,
             com=None,
