@@ -569,7 +569,7 @@ class PandasDataManager(object):
         # The XOR here will ensure that we reduce over the correct axis that
         # exists on the internal partitions. We flip the axis
         result = self.data.full_reduce(map_func, reduce_func, axis ^ self._is_transposed)
-        result.index = index
+        result.index = new_index
         return result
 
     def count(self, **kwargs):
@@ -602,6 +602,11 @@ class PandasDataManager(object):
     def prod(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
+        index = self.index if axis else self.columns
+        new_columns = list()
+        for i, dtype in enumerate(self.dtypes):
+            if is_numeric_dtype(dtype):
+                new_columns.append(index[i])
         func = self._prepare_method(pandas.DataFrame.prod, **kwargs)
         return self.full_reduce(axis, func, numeric_only=True)
 
@@ -668,10 +673,12 @@ class PandasDataManager(object):
     # Currently, this means a Pandas Series will be returned, but in the future
     # we will implement a Distributed Series, and this will be returned
     # instead.
-    def full_axis_reduce(self, func, axis):
+    def full_axis_reduce(self, func, axis, new_index=None):
         result = self.data.map_across_full_axis(axis, func).to_pandas(self._is_transposed)
 
-        if not axis:
+        if new_index:
+            result.index = new_index
+        elif not axis:
             result.index = self.columns
         else:
             result.index = self.index
