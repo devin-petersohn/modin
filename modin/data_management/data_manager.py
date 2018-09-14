@@ -126,7 +126,7 @@ class PandasDataManager(object):
                 return pandas_func(df, **kwargs)
         return helper
 
-    def numeric_indices(self, axis):
+    def numeric_indices(self):
         """Returns the numeric indices
         
         Args:
@@ -135,12 +135,11 @@ class PandasDataManager(object):
         Returns:
             List of index names
         """
-        old_index = self.index if axis else self.columns
-        index = list()
-        for i, dtype in enumerate(self.dtypes):
+        columns = list()
+        for col, dtype in zip(self.columns, self.dtypes):
             if is_numeric_dtype(dtype):
-                index.append(old_index[i])
-        return index
+                columns.append(col)
+        return columns
     # END Internal methods
 
     # Metadata modification methods
@@ -543,9 +542,12 @@ class PandasDataManager(object):
     # instead.
     def full_reduce(self, axis, map_func, reduce_func=None, numeric_only=False):
         if numeric_only:
-            index = self.numeric_indices(axis)
+            index = self.numeric_indices()
             if len(index) == 0:
                 return pandas.Series(dtype=np.float64)
+            nonnumeric = [col for col, dtype in zip(self.columns, self.dtypes) if not is_numeric_dtype(dtype)]
+            if axis:
+                return self.drop(columns=nonnumeric).full_reduce(axis, map_func)
         else:
             if not axis:
                 index = self.columns
@@ -571,33 +573,41 @@ class PandasDataManager(object):
     def max(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
-        numeric_only = kwargs.get("numeric_only", False)
+        numeric_only = True if axis else kwargs.get("numeric_only", False)
         func = self._prepare_method(pandas.DataFrame.max, **kwargs)
         return self.full_reduce(axis, func, numeric_only=numeric_only)
 
     def mean(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
-        func = self._prepare_method(pandas.DataFrame.mean, **kwargs)
+        new_index = self.numeric_indices()
+        if len(new_index) == 0:
+            return pandas.Series(dtype=np.float64)
+
+        def mean_builder(df, internal_indices=[], **kwargs):
+            return pandas.DataFrame.mean(df, **kwargs)
+
+        func = self._prepare_method(mean_builder, **kwargs)
         return self.full_reduce(axis, func, numeric_only=True)
 
     def min(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
-        numeric_only = kwargs.get("numeric_only", False)
+        numeric_only = True if axis else kwargs.get("numeric_only", False)
         func = self._prepare_method(pandas.DataFrame.min, **kwargs)
-        return self.full_reduce(axis, func, numeric_only=True)
+        return self.full_reduce(axis, func, numeric_only=numeric_only)
 
     def prod(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
+        index = self.index if axis else self.columns
         func = self._prepare_method(pandas.DataFrame.prod, **kwargs)
         return self.full_reduce(axis, func, numeric_only=True)
 
     def sum(self, **kwargs):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
-        numeric_only = kwargs.get("numeric_only", False)
+        numeric_only = True if axis else kwargs.get("numeric_only", False)
         func = self._prepare_method(pandas.DataFrame.sum, **kwargs)
         return self.full_reduce(axis, func, numeric_only=numeric_only)
     # END Full Reduce operations
@@ -807,7 +817,7 @@ class PandasDataManager(object):
         cls = type(self)
         axis = 0
 
-        new_index = self.numeric_indices(axis)
+        new_index = self.numeric_indices()
         if len(new_index) != 0:
             numeric = True
         else:
@@ -833,7 +843,7 @@ class PandasDataManager(object):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
 
-        new_index = self.numeric_indices(axis)
+        new_index = self.numeric_indices()
         if len(new_index) == 0:
             return pandas.Series(dtype=np.float64)
 
@@ -847,7 +857,7 @@ class PandasDataManager(object):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
 
-        new_index = self.numeric_indices(axis)
+        new_index = self.numeric_indices()
         if len(new_index) == 0:
             return pandas.Series(dtype=np.float64)
 
@@ -861,7 +871,7 @@ class PandasDataManager(object):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
 
-        new_index = self.numeric_indices(axis)
+        new_index = self.numeric_indices()
         if len(new_index) == 0:
             return pandas.Series(dtype=np.float64)
 
@@ -875,7 +885,7 @@ class PandasDataManager(object):
         # Pandas default is 0 (though not mentioned in docs)
         axis = kwargs.get("axis", 0)
 
-        new_index = self.numeric_indices(axis)
+        new_index = self.numeric_indices()
         if len(new_index) == 0:
             return pandas.Series(dtype=np.float64)
 
@@ -890,7 +900,7 @@ class PandasDataManager(object):
         q = kwargs.get("q", 0.5)
         assert type(q) is float
 
-        new_index = self.numeric_indices(axis)
+        new_index = self.numeric_indices()
         if len(new_index) == 0:
             return pandas.Series(dtype=np.float64)
 
