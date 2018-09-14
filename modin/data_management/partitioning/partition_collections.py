@@ -328,16 +328,19 @@ class BlockPartitions(object):
                 raise ValueError("Some partitions contain Series and some contain DataFrames")
 
             df_rows = [pandas.concat([part for part in row], axis=axis) for row in retrieved_objects]
-            result = pandas.concat(df_rows)
-            return result
+
+            if len(df_rows) == 0:
+                return pandas.DataFrame()
+            else:
+                return pandas.concat(df_rows)
 
     @classmethod
     def from_pandas(cls, df):
         num_splits = cls._compute_num_partitions()
         put_func = cls._partition_class.put
 
-        row_chunksize = compute_chunksize(len(df), num_splits)
-        col_chunksize = compute_chunksize(len(df.columns), num_splits)
+        row_chunksize = max(1, compute_chunksize(len(df), num_splits))
+        col_chunksize = max(1, compute_chunksize(len(df.columns), num_splits))
 
         # Each chunk must have a RangeIndex that spans its length and width
         # according to our invariant.
