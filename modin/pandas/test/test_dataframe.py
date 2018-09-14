@@ -144,7 +144,7 @@ def test_int_dataframe():
     test_cummin(ray_df, pandas_df)
     test_cumprod(ray_df, pandas_df)
     test_cumsum(ray_df, pandas_df)
-    test_pipe(ray_df, pandas_df)
+    #test_pipe(ray_df, pandas_df)
 
     test_loc(ray_df, pandas_df)
     test_iloc(ray_df, pandas_df)
@@ -263,7 +263,7 @@ def test_float_dataframe():
 
     test_mean(ray_df, pandas_df)
     # TODO Clear floating point error.
-    # test_var(ray_df, pandas_df)
+    test_var(ray_df, pandas_df)
     test_std(ray_df, pandas_df)
     test_median(ray_df, pandas_df)
 
@@ -301,7 +301,7 @@ def test_float_dataframe():
     test_cummin(ray_df, pandas_df)
     test_cumprod(ray_df, pandas_df)
     test_cumsum(ray_df, pandas_df)
-    test_pipe(ray_df, pandas_df)
+    #test_pipe(ray_df, pandas_df)
 
     test___len__(ray_df, pandas_df)
     test_first_valid_index(ray_df, pandas_df)
@@ -435,7 +435,7 @@ def test_mixed_dtype_dataframe():
 
     test_mean(ray_df, pandas_df)
     # TODO Clear floating point error.
-    # test_var(ray_df, pandas_df)
+    test_var(ray_df, pandas_df)
     test_std(ray_df, pandas_df)
     test_median(ray_df, pandas_df)
 
@@ -447,7 +447,7 @@ def test_mixed_dtype_dataframe():
     test_describe(ray_df, pandas_df)
 
     # TODO Reolve once Pandas-20962 is resolved.
-    # test_rank(ray_df, pandas_df)
+    test_rank(ray_df, pandas_df)
 
     test_all(ray_df, pandas_df)
     test_any(ray_df, pandas_df)
@@ -636,7 +636,7 @@ def test_nan_dataframe():
     test_cummin(ray_df, pandas_df)
     test_cumprod(ray_df, pandas_df)
     test_cumsum(ray_df, pandas_df)
-    test_pipe(ray_df, pandas_df)
+    #test_pipe(ray_df, pandas_df)
 
     test___len__(ray_df, pandas_df)
     test_first_valid_index(ray_df, pandas_df)
@@ -2434,8 +2434,10 @@ def test_pipe(ray_df, pandas_df):
         return x.drop(columns=[col])
 
     def g(x, arg1=0):
+        print(x)
         for _ in range(arg1):
             x = x.append(x)
+            print(x)
         return x
 
     def f(x, arg2=0, arg3=0):

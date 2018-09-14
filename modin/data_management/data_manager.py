@@ -1118,13 +1118,14 @@ class PandasDataManager(object):
         cls = type(self)
 
         axis = kwargs.get("axis", 0)
+        numeric_only = True if axis else kwargs.get("numeric_only", False)
 
         func = self._prepare_method(pandas.DataFrame.rank, **kwargs)
         new_data = self.map_across_full_axis(axis, func)
 
         # Since we assume no knowledge of internal state, we get the columns
         # from the internal partitions.
-        if kwargs.get("numeric_only", False):
+        if numeric_only:
             new_columns = self.compute_index(1, new_data, True)
         else:
             new_columns = self.columns
