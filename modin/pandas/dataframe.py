@@ -1622,7 +1622,11 @@ class DataFrame(object):
         Returns:
             The counts of dtypes in this object.
         """
-        return self.dtypes.value_counts()
+        result = self.dtypes.value_counts()
+        result.index = result.index.map(lambda x: str(x))
+        result = result.sort_index()
+        result.index = result.index.map(lambda x: np.dtype(getattr(np, x)))
+        return result
 
     def get_ftype_counts(self):
         """Get the counts of ftypes in this object.
@@ -1630,7 +1634,7 @@ class DataFrame(object):
         Returns:
             The counts of ftypes in this object.
         """
-        return self.ftypes.value_counts()
+        return self.ftypes.value_counts().sort_index()
 
     def get_value(self, index, col, takeable=False):
         raise NotImplementedError(
