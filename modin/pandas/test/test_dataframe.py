@@ -146,8 +146,8 @@ def test_int_dataframe():
     test_cumsum(ray_df, pandas_df)
     test_pipe(ray_df, pandas_df)
 
-    # test_loc(ray_df, pandas_df)
-    # test_iloc(ray_df, pandas_df)
+    test_loc(ray_df, pandas_df)
+    test_iloc(ray_df, pandas_df)
 
     labels = ['a', 'b', 'c', 'd']
     test_set_axis(ray_df, pandas_df, labels, 0)
@@ -317,8 +317,8 @@ def test_float_dataframe():
     test_iteritems(ray_df, pandas_df)
     test_itertuples(ray_df, pandas_df)
 
-    #test_loc(ray_df, pandas_df)
-    #test_iloc(ray_df, pandas_df)
+    test_loc(ray_df, pandas_df)
+    test_iloc(ray_df, pandas_df)
 
     labels = ['a', 'b', 'c', 'd']
     test_set_axis(ray_df, pandas_df, labels, 0)
@@ -500,8 +500,8 @@ def test_mixed_dtype_dataframe():
     test_iteritems(ray_df, pandas_df)
     test_itertuples(ray_df, pandas_df)
 
-    #test_loc(ray_df, pandas_df)
-    #test_iloc(ray_df, pandas_df)
+    test_loc(ray_df, pandas_df)
+    test_iloc(ray_df, pandas_df)
 
     labels = ['a', 'b', 'c', 'd']
     test_set_axis(ray_df, pandas_df, labels, 0)
@@ -652,8 +652,8 @@ def test_nan_dataframe():
     test_iteritems(ray_df, pandas_df)
     test_itertuples(ray_df, pandas_df)
 
-    #test_loc(ray_df, pandas_df)
-    #test_iloc(ray_df, pandas_df)
+    test_loc(ray_df, pandas_df)
+    test_iloc(ray_df, pandas_df)
 
     labels = ['a', 'b', 'c', 'd']
     test_set_axis(ray_df, pandas_df, labels, 0)
@@ -1571,7 +1571,6 @@ def test_eval_df_use_case():
         inplace=True)
     # TODO: Use a series equality validator.
     assert ray_df_equals_pandas(ray_df, df)
-
 
 
 def test_eval_df_arithmetic_subexpression():
