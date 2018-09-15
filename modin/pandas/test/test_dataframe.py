@@ -2434,10 +2434,8 @@ def test_pipe(ray_df, pandas_df):
         return x.drop(columns=[col])
 
     def g(x, arg1=0):
-        print(x)
         for _ in range(arg1):
             x = x.append(x)
-            print(x)
         return x
 
     def f(x, arg2=0, arg3=0):
