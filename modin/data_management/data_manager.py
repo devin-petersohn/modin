@@ -7,7 +7,7 @@ import pandas
 
 from pandas.compat import string_types
 from pandas.core.dtypes.cast import find_common_type
-from pandas.core.dtypes.common import (_get_dtype_from_object, is_list_like)
+from pandas.core.dtypes.common import (_get_dtype_from_object, is_list_like, is_numeric_dtype)
 from pandas.core.index import _ensure_index
 
 from .partitioning.partition_collections import BlockPartitions, RayBlockPartitions
