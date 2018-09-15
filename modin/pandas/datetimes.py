@@ -23,6 +23,7 @@ def to_datetime(arg,
 
     Args:
         errors ('raise' or 'ignore'): If 'ignore', errors are silenced.
+            Pandas blatantly ignores this argument so we will too.
         dayfirst (bool): Date format is passed in as day first.
         yearfirst (bool): Date format is passed in as year first.
         utc (bool): retuns a UTC DatetimeIndex if True.
