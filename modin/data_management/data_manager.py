@@ -680,14 +680,13 @@ class PandasDataManager(object):
     # Currently, this means a Pandas Series will be returned, but in the future
     # we will implement a Distributed Series, and this will be returned
     # instead.
-    def full_axis_reduce(self, func, axis, named_index=True):
+    def full_axis_reduce(self, func, axis):
         result = self.data.map_across_full_axis(axis, func).to_pandas(self._is_transposed)
 
-        if named_index:
-            if not axis:
-                result.index = self.columns
-            else:
-                result.index = self.index
+        if not axis:
+            result.index = self.columns
+        else:
+            result.index = self.index
 
         return result
 
@@ -750,26 +749,6 @@ class PandasDataManager(object):
         # Because our internal partitions don't track the external index, we
         # have to do a conversion.
         return self._post_process_idx_ops(axis, min_result)
-
-    def info(self, **kwargs):
-        memory_usage = kwargs.get('memory_usage', True)
-        null_counts = kwargs.get('null_counts', True)
-
-        if type(memory_usage) == str and memory_usage == 'deep':
-            memory_usage_deep = True
-        else:
-            memory_usage_deep = False
-
-        def info_builder(df, **kwargs):
-            result = pandas.DataFrame()
-            if memory_usage:
-                result['memory'] = df.memory_usage(index=False, deep=memory_usage_deep)
-            if null_counts:
-                result['count'] = df.count(axis=0)
-            return result
-        
-        func = self._prepare_method(info_builder, **kwargs)
-        return self.full_axis_reduce(func, 0, False)
 
     def last_valid_index(self):
 

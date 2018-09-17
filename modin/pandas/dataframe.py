@@ -1724,20 +1724,10 @@ class DataFrame(object):
         # Create the Index info() string by parsing self.index
         index_string = index.summary() + '\n'
 
-        if memory_usage or null_counts:
-            results_data = self._data_manager.info(
-                    verbose=actually_verbose,
-                    max_cols=max_cols,
-                    memory_usage=memory_usage,
-                    null_counts=null_counts
-                    )
-            if null_counts:
-                counts = results_data['count']
-                counts.columns = columns
-            if memory_usage:
-                # For some reason, the memory table has a shape of (columns, columns)
-                # but it doesn't matter because the cells not on the diagonal are NaN
-                memory_usage_data = results_data['memory'].sum() + index.memory_usage(deep=memory_usage_deep)
+        if null_counts:
+            counts = self._data_manager.count()
+        if memory_usage:
+            memory_usage_data = self._data_manager.memory_usage(deep=memory_usage_deep, index=True)
 
         if actually_verbose:
             # Create string for verbose output
