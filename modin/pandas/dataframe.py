@@ -1734,7 +1734,6 @@ class DataFrame(object):
             if null_counts:
                 counts = results_data['count']
                 counts.columns = columns
-                print(counts)
             if memory_usage:
                 # For some reason, the memory table has a shape of (columns, columns)
                 # but it doesn't matter because the cells not on the diagonal are NaN
