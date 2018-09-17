@@ -118,7 +118,7 @@ def post_task_gc(func):
     Note:
         - This will invoke the GC for the entire process. Expect
           About 100ms latency.
-        - We have a basic herustic in place to balance of tradeoff between
+        - We have a basic heuristic in place to balance of trade-off between
           speed and memory. If the task takes more than 500ms to run, we
           will do the GC.
     """
@@ -139,7 +139,7 @@ def post_task_gc(func):
 
 
 def _get_nan_block_id(n_row=1, n_col=1, transpose=False):
-    """A memory efficent way to get a block of NaNs.
+    """A memory efficient way to get a block of NaNs.
 
     Args:
         n_rows(int): number of rows
