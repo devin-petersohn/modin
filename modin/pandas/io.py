@@ -16,7 +16,6 @@ import warnings
 import numpy as np
 
 from .dataframe import ray, DataFrame
-from . import get_npartitions
 from .utils import from_pandas
 from ..data_management.partitioning.partition_collections import RayBlockPartitions
 from ..data_management.partitioning.remote_partition import RayRemotePartition
