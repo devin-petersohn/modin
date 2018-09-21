@@ -279,7 +279,6 @@ def read_csv(filepath_or_buffer,
             warnings.warn(("File not found on disk. "
                            "Defaulting to Pandas implementation."),
                           PendingDeprecationWarning)
-
             return _read_csv_from_pandas(filepath_or_buffer, kwargs)
     elif not isinstance(filepath_or_buffer, py.path.local):
         read_from_pandas = True
@@ -296,27 +295,23 @@ def read_csv(filepath_or_buffer,
             warnings.warn(("Reading from buffer. "
                            "Defaulting to Pandas implementation."),
                           PendingDeprecationWarning)
-
             return _read_csv_from_pandas(filepath_or_buffer, kwargs)
 
     if _infer_compression(filepath_or_buffer, compression) is not None:
         warnings.warn(("Compression detected. "
                        "Defaulting to Pandas implementation."),
                       PendingDeprecationWarning)
-
         return _read_csv_from_pandas(filepath_or_buffer, kwargs)
 
     if as_recarray:
         warnings.warn("Defaulting to Pandas implementation.",
                       PendingDeprecationWarning)
-
         return _read_csv_from_pandas(filepath_or_buffer, kwargs)
 
     if chunksize is not None:
         warnings.warn(("Reading chunks from a file. "
                        "Defaulting to Pandas implementation."),
                       PendingDeprecationWarning)
-
         return _read_csv_from_pandas(filepath_or_buffer, kwargs)
 
     if skiprows is not None and not isinstance(skiprows, int):
@@ -330,7 +325,6 @@ def read_csv(filepath_or_buffer,
     if nrows is not None:
         warnings.warn("Defaulting to Pandas implementation.",
                       PendingDeprecationWarning)
-
         return _read_csv_from_pandas(filepath_or_buffer, kwargs)
 
     return _read_csv_from_file_pandas_on_ray(filepath_or_buffer, get_npartitions(), kwargs)

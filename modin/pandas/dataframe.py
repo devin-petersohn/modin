@@ -3488,9 +3488,7 @@ class DataFrame(object):
                 by=by, axis=axis, ascending=ascending, kind=kind).index
             return self.reindex(index=new_index)
         else:
-            broadcast_value_list = [
-                to_pandas(self[row::len(self.index)]) for row in by
-            ]
+            broadcast_value_list = [to_pandas(self[row::len(self.index)]) for row in by]
 
             index_builder = list(zip(broadcast_value_list, by))
 
