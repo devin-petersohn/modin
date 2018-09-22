@@ -1202,6 +1202,11 @@ class PandasDataManager(object):
         return self.__constructor__(new_data, self.index, self.columns)
 
     def dropna(self, **kwargs):
+        """Returns a new DataManager with null values dropped along given axis.
+
+        Return:
+            a new DataManager
+        """
         axis = kwargs.get("axis", 0)
         subset = kwargs.get("subset")
         thresh = kwargs.get("thresh")
@@ -1243,13 +1248,20 @@ class PandasDataManager(object):
         return self.drop(index=rm_from_index, columns=rm_from_columns)
 
     def eval(self, expr, **kwargs):
+        """Returns a new DataManager with expr evaluated on columns.
 
+        Args:
+            expr: The string expression to evaluate.
+
+        Returns:
+            A new PandasDataManager with new columns after applying expr.
+        """
         inplace = kwargs.get("inplace", False)
 
         columns = self.index if self._is_transposed else self.columns
         index = self.columns if self._is_transposed else self.index
 
-        # Dun eval on columns to determine result type
+        # Make a copy of columns and eval on the copy to determine if result type is series or not
         columns_copy = pandas.DataFrame(columns=self.columns)
         columns_copy = columns_copy.eval(expr, inplace=False, **kwargs)
         expect_series = isinstance(columns_copy, pandas.Series)
@@ -1281,6 +1293,11 @@ class PandasDataManager(object):
             return self.__constructor__(new_data, self.index, columns)
 
     def mode(self, **kwargs):
+        """Returns a new DataManager with modes calculated for each label along given axis.
+
+        Returns:
+            A new PandasDataManager with modes calculated.
+        """
         axis = kwargs.get("axis", 0)
         func = self._prepare_method(pandas.DataFrame.mode, **kwargs)
         new_data = self.map_across_full_axis(axis, func)
@@ -1300,8 +1317,11 @@ class PandasDataManager(object):
         return self.__constructor__(final_data, new_index, new_columns, self._dtype_cache)
 
     def fillna(self, **kwargs):
+        """Returns a new DataManager with null values filled by given values or according to given method.
 
-
+        Returns:
+            A new PandasDataManager with null values filled.
+        """
         axis = kwargs.get("axis", 0)
         value = kwargs.get("value")
 
@@ -1570,10 +1590,10 @@ class PandasDataManager(object):
             return new_data.to_pandas()[key]
 
     def getitem_column_array(self, key):
-        """Get column data for target index.
+        """Get column data for target labels.
 
         Args:
-            key: Target index by which to retrieve data.
+            key: Target labels by which to retrieve data.
 
         Returns:
             A new PandasDataManager.
@@ -1595,10 +1615,10 @@ class PandasDataManager(object):
         return self.__constructor__(result, self.index, new_columns, new_dtypes)
 
     def getitem_row_array(self, key):
-        """Get row data for target index.
+        """Get row data for target labels.
 
         Args:
-            key: Target index by which to retrieve data.
+            key: Target labels by which to retrieve data.
 
         Returns:
             A new PandasDataManager.
@@ -1667,7 +1687,7 @@ class PandasDataManager(object):
     # return a new one from here and let the front end handle the inplace
     # update.
     def insert(self, loc, column, value):
-        """Get row data for target index.
+        """Insert new column data.
 
         Args:
             loc: Insertion index.
@@ -1675,7 +1695,7 @@ class PandasDataManager(object):
             value: Dtype object values to insert.
 
         Returns:
-            A new PandasDataManager.
+            A new PandasDataManager with new data inserted.
         """
         def insert(df, internal_indices=[]):
             internal_idx = internal_indices[0]
