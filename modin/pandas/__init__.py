@@ -22,6 +22,9 @@ from .dataframe import DataFrame  # noqa: 402
 from .datetimes import to_datetime  # noqa: 402
 from .reshape import get_dummies # noqa: 402
 
+# Set this so that Pandas doesn't try to multithread by itself
+os.environ['OMP_NUM_THREADS'] = "1"
+
 try:
     if threading.current_thread().name == "MainThread":
         ray.init(
@@ -30,9 +33,6 @@ try:
             redirect_worker_output=True)
 except AssertionError:
     pass
-
-# Set this so that Pandas doesn't try to multithread by itself
-os.environ['OMP_NUM_THREADS'] = "1"
 
 num_cpus = ray.global_state.cluster_resources()['CPU']
 DEFAULT_NPARTITIONS = int(num_cpus)
