@@ -35,7 +35,8 @@ except AssertionError:
     pass
 
 num_cpus = ray.global_state.cluster_resources()['CPU']
-DEFAULT_NPARTITIONS = int(num_cpus)
+# DEFAULT_NPARTITIONS = int(num_cpus)
+DEFAULT_NPARTITIONS = 1
 
 def set_npartition_default(n):
     global DEFAULT_NPARTITIONS

@@ -88,9 +88,16 @@ class RayAxisPartition(AxisPartition):
             num_splits = len(self.list_of_blocks)
 
         if other_axis_partition is not None:
-            return [RayRemotePartition(obj) for obj in deploy_ray_func_between_two_axis_partitions._submit(args=(self.axis, func, num_splits, len(self.list_of_blocks), kwargs) + tuple(self.list_of_blocks + other_axis_partition.list_of_blocks), num_return_vals=num_splits)]
+            if num_splits == 1:
+                return [RayRemotePartition(deploy_ray_func_between_two_axis_partitions._submit(args=(self.axis, func, num_splits, len(self.list_of_blocks), kwargs) + tuple(self.list_of_blocks + other_axis_partition.list_of_blocks), num_return_vals=num_splits))]
+            else:
+                return [RayRemotePartition(obj) for obj in deploy_ray_func_between_two_axis_partitions._submit(args=(self.axis, func, num_splits, len(self.list_of_blocks), kwargs) + tuple(self.list_of_blocks + other_axis_partition.list_of_blocks), num_return_vals=num_splits)]
 
-        return [RayRemotePartition(obj) for obj in deploy_ray_axis_func._submit(args=(self.axis, func, num_splits, kwargs, *self.list_of_blocks), num_return_vals=num_splits)]
+        obj = (ray.get(deploy_ray_axis_func._submit(args=(self.axis, func, num_splits, kwargs, *self.list_of_blocks), num_return_vals=num_splits)))
+        if num_splits == 1:
+            return [RayRemotePartition(deploy_ray_axis_func._submit(args=(self.axis, func, num_splits, kwargs, *self.list_of_blocks), num_return_vals=num_splits))]
+        else:
+            return [RayRemotePartition(obj) for obj in deploy_ray_axis_func._submit(args=(self.axis, func, num_splits, kwargs, *self.list_of_blocks), num_return_vals=num_splits)]
 
     def shuffle(self, func, num_splits=None, **kwargs):
         """Shuffle the order of the data in this axis based on the `func`.
@@ -137,6 +144,8 @@ def split_result_of_axis_func_pandas(axis, num_splits, result):
         A list of Pandas DataFrames.
     """
     # We do this to restore block partitioning
+    if num_splits == 1:
+        return result
     if axis == 0 or type(result) is pandas.Series:
         chunksize = compute_chunksize(len(result), num_splits)
         return [result.iloc[chunksize * i: chunksize * (i + 1)] for i in range(num_splits)]

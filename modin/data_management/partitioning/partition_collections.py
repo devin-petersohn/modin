@@ -337,13 +337,20 @@ class BlockPartitions(object):
         # transpose back then transpose after the conversion. The performance
         # is the same as if we individually transposed the blocks and
         # concatenated them, but the code is much smaller.
+        cls = type(self)
+        num_splits = cls._compute_num_partitions()
+
         if is_transposed:
             return self.transpose().to_pandas(False).T
         else:
             retrieved_objects = [[obj.to_pandas() for obj in part] for part in self.partitions]
+
             if all(isinstance(part, pandas.Series) for row in retrieved_objects for part in row):
                 axis = 0
-                retrieved_objects = np.array(retrieved_objects).T
+                if num_splits == 1:
+                    pass
+                else:
+                    retrieved_objects = np.array(retrieved_objects).T
             elif all(isinstance(part, pandas.DataFrame) for row in retrieved_objects for part in row):
                 axis = 1
             else:
@@ -470,6 +477,10 @@ class BlockPartitions(object):
             block_idx = int(np.digitize(index, cumulative_column_widths))
             # Compute the internal index based on the previous lengths. This
             # is a global index, so we must subtract the lengths first.
+            print(block_idx)
+            print(cumulative_column_widths)
+            print(self.block_widths)
+            print(index)
             internal_idx = index if not block_idx else index - cumulative_column_widths[block_idx - 1]
             return block_idx, internal_idx
         else:
@@ -561,6 +572,8 @@ class BlockPartitions(object):
             partitions_for_apply = self.partitions.T
         else:
             partitions_for_apply = self.partitions
+        print(partitions_for_apply)
+        print(partitions_dict)
 
         # We may have a command to perform different functions on different
         # columns at the same time. We attempt to handle this as efficiently as
