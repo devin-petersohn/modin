@@ -123,6 +123,7 @@ def initialize_ray():
                     object_store_memory = None
             except ImportError:
                 pass
+        print(object_store_memory)
         ray.init(
             redirect_output=True,
             include_webui=False,
