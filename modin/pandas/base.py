@@ -2929,12 +2929,6 @@ class BasePandasDataset(object):
     def to_sparse(self, fill_value=None, kind="block"):
         return self._default_to_pandas("to_sparse", fill_value=fill_value, kind=kind)
 
-    # TODO(williamma12): When this gets implemented, have the series one call this.
-    def to_timestamp(self, freq=None, how="start", axis=0, copy=True):
-        return self._default_to_pandas(
-            "to_timestamp", freq=freq, how=how, axis=axis, copy=copy
-        )
-
     def to_string(
         self,
         buf=None,
@@ -3008,6 +3002,12 @@ class BasePandasDataset(object):
             chunksize=chunksize,
             dtype=dtype,
             method=method,
+        )
+
+    # TODO(williamma12): When this gets implemented, have the series one call this.
+    def to_timestamp(self, freq=None, how="start", axis=0, copy=True):
+        return self._default_to_pandas(
+            "to_timestamp", freq=freq, how=how, axis=axis, copy=copy
         )
 
     def to_xarray(self):
