@@ -9,6 +9,19 @@ from modin.engines.ray.utils import handle_ray_task_error
 class RayFrameManager(BaseFrameManager):
     """This method implements the interface in `BaseFrameManager`."""
 
+    def to_numpy(self, is_transposed=False):
+        """Convert this object into a NumPy Array from the partitions.
+
+        Returns:
+            A NumPy Array
+        """
+        parts = ray.get([obj.apply(lambda df: df.to_numpy()).oid for row in self.partitions for obj in row])
+        parts = np.reshape(parts, self.partitions.shape)
+        arr = np.concatenate([np.concatenate(p, axis=1) for p in parts], axis=0)
+        if is_transposed:
+            return arr.T
+        return arr
+
     def __init__(self, partitions):
         self.partitions = partitions
 
