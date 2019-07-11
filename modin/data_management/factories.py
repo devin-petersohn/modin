@@ -234,6 +234,14 @@ class PandasOnDaskFactory(BaseFactory):
     block_partitions_cls = DaskFrameManager
     io_cls = PandasOnDaskIO
 
+class PandasOnDropletFactory(BaseFactory):
+    from modin.engines.droplet.frame.partition_manager import DropletFrameManager
+    from modin.engines.droplet.io import PandasOnDropletIO
+
+    query_compiler_cls = PandasQueryCompiler
+    block_partitions_cls = DropletFrameManager
+    io_cls = PandasOnDropletIO
+
 
 class PyarrowOnRayFactory(BaseFactory):
 
