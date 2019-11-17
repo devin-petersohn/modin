@@ -12,13 +12,13 @@ ray_deps = ["ray==0.7.5"]
 
 setup(
     name="modin",
-    version="0.6.1",
+    version="0.6.2",
     description="Modin: Make your pandas code run faster by changing one line of code.",
     packages=find_packages(),
     url="https://github.com/modin-project/modin",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    install_requires=["pandas==0.25.1"],
+    install_requires=["pandas==0.25.3"],
     extras_require={
         # can be installed by pip install modin[dask]
         "dask": dask_deps,

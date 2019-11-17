@@ -5,6 +5,7 @@ import pandas
 import matplotlib
 import modin.pandas as pd
 from numpy.testing import assert_array_equal
+import sys
 
 from modin.pandas.utils import to_pandas
 from .utils import (
@@ -1684,7 +1685,6 @@ def test_loc(data):
     modin_series, pandas_series = create_test_series(data)
     for v in modin_series.index:
         df_equals(modin_series.loc[v], pandas_series.loc[v])
-        print(v)
         df_equals(modin_series.loc[v:], pandas_series.loc[v:])
 
     indices = [True if i % 3 == 0 else False for i in range(len(modin_series.index))]
@@ -1718,6 +1718,16 @@ def test_map(data, na_values):
     df_equals(
         modin_series.map(mapper, na_action=na_values),
         pandas_series.map(mapper, na_action=na_values),
+    )
+
+    # Return list objects
+    modin_series_lists = modin_series.map(lambda s: [s, s, s])
+    pandas_series_lists = pandas_series.map(lambda s: [s, s, s])
+    df_equals(modin_series_lists, pandas_series_lists)
+
+    # Index into list objects
+    df_equals(
+        modin_series_lists.map(lambda l: l[0]), pandas_series_lists.map(lambda l: l[0])
     )
 
 
@@ -2707,6 +2717,10 @@ def test_str_cat():
 @pytest.mark.parametrize("n", int_arg_values, ids=int_arg_keys)
 @pytest.mark.parametrize("expand", bool_arg_values, ids=bool_arg_keys)
 def test_str_split(data, pat, n, expand):
+    # Empty pattern not supported on Python 3.7+
+    if sys.version_info[0] == 3 and sys.version_info[1] >= 7 and pat == "":
+        return
+
     modin_series, pandas_series = create_test_series(data)
 
     if n >= -1:

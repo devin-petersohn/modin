@@ -95,6 +95,15 @@ class BasePandasDataset(object):
             sib._query_compiler = new_query_compiler
         old_query_compiler.free()
 
+    def _handle_level_agg(self, axis, level, op, **kwargs):
+        """Helper method to perform error checking for aggregation functions with a level parameter.
+        Args:
+            axis: The axis to apply the operation on
+            level: The level of the axis to apply the operation on
+            op: String representation of the operation to be performed on the level
+        """
+        return getattr(self.groupby(level=level, axis=axis), op)(**kwargs)
+
     def _validate_other(
         self,
         other,
@@ -409,6 +418,14 @@ class BasePandasDataset(object):
                 return data_for_compute.all(
                     axis=axis, bool_only=False, skipna=skipna, level=level, **kwargs
                 )
+            if level is not None:
+                if bool_only is not None:
+                    raise NotImplementedError(
+                        "Option bool_only is not implemented with option level."
+                    )
+                return self._handle_level_agg(
+                    axis, level, "all", skipna=skipna, **kwargs
+                )
             return self._reduce_dimension(
                 self._query_compiler.all(
                     axis=axis, bool_only=bool_only, skipna=skipna, level=level, **kwargs
@@ -418,11 +435,20 @@ class BasePandasDataset(object):
             if bool_only:
                 raise ValueError("Axis must be 0 or 1 (got {})".format(axis))
             # Reduce to a scalar if axis is None.
-            result = self._reduce_dimension(
-                self._query_compiler.all(
-                    axis=0, bool_only=bool_only, skipna=skipna, level=level, **kwargs
+            if level is not None:
+                return self._handle_level_agg(
+                    axis, level, "all", skipna=skipna, **kwargs
                 )
-            )
+            else:
+                result = self._reduce_dimension(
+                    self._query_compiler.all(
+                        axis=0,
+                        bool_only=bool_only,
+                        skipna=skipna,
+                        level=level,
+                        **kwargs
+                    )
+                )
             if isinstance(result, BasePandasDataset):
                 return result.all(
                     axis=axis, bool_only=bool_only, skipna=skipna, level=level, **kwargs
@@ -446,8 +472,16 @@ class BasePandasDataset(object):
                         )
                     )
                 data_for_compute = self[self.columns[self.dtypes == np.bool]]
-                return data_for_compute.all(
-                    axis=axis, bool_only=None, skipna=skipna, level=level, **kwargs
+                return data_for_compute.any(
+                    axis=axis, bool_only=False, skipna=skipna, level=level, **kwargs
+                )
+            if level is not None:
+                if bool_only is not None:
+                    raise NotImplementedError(
+                        "Option bool_only is not implemented with option level."
+                    )
+                return self._handle_level_agg(
+                    axis, level, "any", skipna=skipna, **kwargs
                 )
             return self._reduce_dimension(
                 self._query_compiler.any(
@@ -458,11 +492,20 @@ class BasePandasDataset(object):
             if bool_only:
                 raise ValueError("Axis must be 0 or 1 (got {})".format(axis))
             # Reduce to a scalar if axis is None.
-            result = self._reduce_dimension(
-                self._query_compiler.any(
-                    axis=0, bool_only=bool_only, skipna=skipna, level=level, **kwargs
+            if level is not None:
+                return self._handle_level_agg(
+                    axis, level, "any", skipna=skipna, **kwargs
                 )
-            )
+            else:
+                result = self._reduce_dimension(
+                    self._query_compiler.any(
+                        axis=0,
+                        bool_only=bool_only,
+                        skipna=skipna,
+                        level=level,
+                        **kwargs
+                    )
+                )
             if isinstance(result, BasePandasDataset):
                 return result.any(
                     axis=axis, bool_only=bool_only, skipna=skipna, level=level, **kwargs
@@ -686,16 +729,15 @@ class BasePandasDataset(object):
         """
 
         axis = self._get_axis_number(axis) if axis is not None else 0
+        if numeric_only is not None and not numeric_only:
+            self._validate_dtypes(numeric_only=True)
 
         if level is not None:
-
             if not isinstance(self.axes[axis], pandas.MultiIndex):
                 # error thrown by pandas
                 raise TypeError("Can only count levels on hierarchical columns.")
 
-            if isinstance(level, str):
-                level = self.axes[axis].names.index(level)
-            return self.groupby(level=level, axis=axis).count()
+            return self._handle_level_agg(axis, level, "count")
 
         return self._reduce_dimension(
             self._query_compiler.count(
@@ -1053,7 +1095,7 @@ class BasePandasDataset(object):
             duplicates = self.duplicated(keep=keep, **kwargs)
         else:
             duplicates = self.duplicated(keep=keep, **kwargs)
-        indices, = duplicates.values.nonzero()
+        (indices,) = duplicates.values.nonzero()
         return self.drop(index=self.index[indices], inplace=inplace)
 
     def duplicated(self, keep="first", **kwargs):
@@ -1805,6 +1847,17 @@ class BasePandasDataset(object):
         """
         axis = self._get_axis_number(axis) if axis is not None else 0
         data = self._validate_dtypes_sum_prod_mean(axis, numeric_only, ignore_axis=True)
+        if min_count > 1:
+            return data._reduce_dimension(
+                query_compiler=data._query_compiler.prod_min_count(
+                    axis=axis,
+                    skipna=skipna,
+                    level=level,
+                    numeric_only=numeric_only,
+                    min_count=min_count,
+                    **kwargs
+                )
+            )
         return data._reduce_dimension(
             data._query_compiler.prod(
                 axis=axis,
@@ -1883,7 +1936,7 @@ class BasePandasDataset(object):
                 )
             )
         else:
-            return self._reduce_dimension(
+            result = self._reduce_dimension(
                 self._query_compiler.quantile_for_single_value(
                     q=q,
                     axis=axis,
@@ -1891,6 +1944,9 @@ class BasePandasDataset(object):
                     interpolation=interpolation,
                 )
             )
+            if isinstance(result, BasePandasDataset):
+                result.name = q
+            return result
 
     def rank(
         self,
@@ -2705,6 +2761,17 @@ class BasePandasDataset(object):
         data = self._validate_dtypes_sum_prod_mean(
             axis, numeric_only, ignore_axis=False
         )
+        if min_count > 1:
+            return data._reduce_dimension(
+                query_compiler=data._query_compiler.sum_min_count(
+                    axis=axis,
+                    skipna=skipna,
+                    level=level,
+                    numeric_only=numeric_only,
+                    min_count=min_count,
+                    **kwargs
+                )
+            )
         return data._reduce_dimension(
             data._query_compiler.sum(
                 axis=axis,
@@ -3213,7 +3280,6 @@ class BasePandasDataset(object):
             if key.start is None:
                 return self.head(compute_offset(key.stop))
             elif key.stop is None:
-                print(compute_offset(-key.start))
                 return self.tail(compute_offset(-key.start))
             return self.head(compute_offset(key.stop)).tail(compute_offset(-key.start))
         # We convert to a RangeIndex because getitem_row_array is expecting a list

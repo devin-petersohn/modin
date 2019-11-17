@@ -9,7 +9,12 @@ from pandas.core.base import DataError
 
 from modin.backends.base.query_compiler import BaseQueryCompiler
 from modin.error_message import ErrorMessage
-from modin.data_management.functions import MapFunction
+from modin.data_management.functions import (
+    FoldFunction,
+    MapFunction,
+    MapReduceFunction,
+    ReductionFunction,
+)
 
 
 def _get_axis(axis):
@@ -356,179 +361,37 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
     # END Transpose
 
-    # Full Reduce operations
-    #
-    # These operations result in a reduced dimensionality of data.
-    # This will return a new QueryCompiler, which will be handled in the front end.
+    # MapReduce operations
 
-    def count(self, **kwargs):
-        """Counts the number of non-NaN objects for each column or row.
+    count = MapReduceFunction.register(pandas.DataFrame.count, pandas.DataFrame.sum)
+    max = MapReduceFunction.register(pandas.DataFrame.max, pandas.DataFrame.max)
+    min = MapReduceFunction.register(pandas.DataFrame.min, pandas.DataFrame.min)
+    sum = MapReduceFunction.register(pandas.DataFrame.sum, pandas.DataFrame.sum)
+    prod = MapReduceFunction.register(pandas.DataFrame.prod, pandas.DataFrame.prod)
+    any = MapReduceFunction.register(pandas.DataFrame.any, pandas.DataFrame.any)
+    all = MapReduceFunction.register(pandas.DataFrame.all, pandas.DataFrame.all)
+    memory_usage = MapReduceFunction.register(
+        pandas.DataFrame.memory_usage,
+        lambda x, *args, **kwargs: pandas.DataFrame.sum(x),
+        axis=0,
+    )
 
-        Return:
-            A new QueryCompiler object containing counts of non-NaN objects from each
-            column or row.
-        """
-        axis = kwargs.get("axis", 0)
-        return self._modin_frame._map_reduce(
-            axis, lambda df: df.count(**kwargs), lambda df: df.sum(**kwargs)
-        )
+    # END MapReduce operations
 
-    def dot(self, other):
-        """Computes the matrix multiplication of self and other.
+    # Reduction operations
+    idxmax = ReductionFunction.register(pandas.DataFrame.idxmax)
+    idxmin = ReductionFunction.register(pandas.DataFrame.idxmin)
+    median = ReductionFunction.register(pandas.DataFrame.median)
+    nunique = ReductionFunction.register(pandas.DataFrame.nunique)
+    skew = ReductionFunction.register(pandas.DataFrame.skew)
+    std = ReductionFunction.register(pandas.DataFrame.std)
+    var = ReductionFunction.register(pandas.DataFrame.var)
+    sum_min_count = ReductionFunction.register(pandas.DataFrame.sum)
+    prod_min_count = ReductionFunction.register(pandas.DataFrame.prod)
+    mean = ReductionFunction.register(pandas.DataFrame.mean)
+    quantile_for_single_value = ReductionFunction.register(pandas.DataFrame.quantile)
 
-        Args:
-            other: The other query compiler or other array-like to matrix
-            multiply with self.
-
-        Returns:
-            Returns the result of the matrix multiply.
-        """
-
-        def map_func(df, other=other):
-            if isinstance(other, pandas.DataFrame):
-                other = other.squeeze()
-            result = df.squeeze().dot(other)
-            if is_list_like(result):
-                return pandas.DataFrame(result)
-            else:
-                return pandas.DataFrame([result])
-
-        if len(self.columns) == 1:
-            axis = 0
-            new_index = ["__reduce__"]
-        else:
-            axis = 1
-            new_index = self.index
-        new_modin_frame = self._modin_frame._apply_full_axis(
-            axis, map_func, new_index=new_index, new_columns=["__reduced__"]
-        )
-        return self.__constructor__(new_modin_frame)
-
-    def max(self, **kwargs):
-        """Returns the maximum value for each column or row.
-
-        Return:
-            A new QueryCompiler object with the maximum values from each column or row.
-        """
-        return self._modin_frame._map_reduce(
-            kwargs.get("axis", 0), lambda df: df.max(**kwargs)
-        )
-
-    def mean(self, **kwargs):
-        """Returns the mean for each numerical column or row.
-
-        Return:
-            A new QueryCompiler object containing the mean from each numerical column or
-            row.
-        """
-        axis = kwargs.pop("axis", 0)
-        numeric_only = kwargs.pop("numeric_only", False)
-        if numeric_only:
-            obj = self._modin_frame.mask(
-                col_indices=self._modin_frame._numeric_columns()
-            )
-        else:
-            obj = self._modin_frame
-        return obj._map_reduce(
-            axis,
-            map_func=lambda df: df.apply(
-                lambda s: (s.sum(**kwargs), s.count()), axis=axis
-            ),
-            reduce_func=lambda df: df.apply(
-                lambda x: x.apply(lambda item: item[0]).sum(**kwargs)
-                / x.apply(lambda item: item[1]).sum(**kwargs),
-                axis=axis,
-            ),
-        )
-
-    def min(self, **kwargs):
-        """Returns the minimum from each column or row.
-
-        Return:
-            A new QueryCompiler object with the minimum value from each column or row.
-        """
-        return self._modin_frame._map_reduce(
-            kwargs.get("axis", 0), lambda df: df.min(**kwargs)
-        )
-
-    def _process_sum_prod(self, func, **kwargs):
-        """Calculates the sum or product of the DataFrame.
-
-        Args:
-            func: Pandas func to apply to DataFrame.
-            ignore_axis: Whether to ignore axis when raising TypeError
-        Return:
-            A new QueryCompiler object with sum or prod of the object.
-        """
-        axis = kwargs.get("axis", 0)
-        min_count = kwargs.get("min_count", 0)
-        if min_count <= 1:
-            return self.__constructor__(
-                self._modin_frame._map_reduce(axis, lambda df: func(df, **kwargs))
-            )
-        else:
-            return self.__constructor__(
-                self._modin_frame._fold_reduce(axis, lambda df: func(df, **kwargs))
-            )
-
-    def prod(self, **kwargs):
-        """Returns the product of each numerical column or row.
-
-        Return:
-            A new QueryCompiler object with the product of each numerical column or row.
-        """
-        return self._process_sum_prod(pandas.DataFrame.prod, **kwargs)
-
-    def sum(self, **kwargs):
-        """Returns the sum of each numerical column or row.
-
-        Return:
-            A new QueryCompiler object with the sum of each numerical column or row.
-        """
-        return self._process_sum_prod(pandas.DataFrame.sum, **kwargs)
-
-    def _process_all_any(self, func, **kwargs):
-        """Calculates if any or all the values are true.
-
-        Return:
-            A new QueryCompiler object containing boolean values or boolean.
-        """
-        axis = kwargs.get("axis", 0)
-        axis = 0 if axis is None else axis
-        kwargs["axis"] = axis
-        return self.__constructor__(
-            self._modin_frame._map_reduce(axis, lambda df: func(df, **kwargs))
-        )
-
-    def all(self, **kwargs):
-        """Returns whether all the elements are true, potentially over an axis.
-
-        Return:
-            A new QueryCompiler object containing boolean values or boolean.
-        """
-        return self._process_all_any(lambda df, **kwargs: df.all(**kwargs), **kwargs)
-
-    def any(self, **kwargs):
-        """Returns whether any the elements are true, potentially over an axis.
-
-        Return:
-            A new QueryCompiler object containing boolean values or boolean.
-        """
-        return self._process_all_any(lambda df, **kwargs: df.any(**kwargs), **kwargs)
-
-    def memory_usage(self, **kwargs):
-        """Returns the memory usage of each column.
-
-        Returns:
-            A new QueryCompiler object containing the memory usage of each column.
-        """
-        return self.__constructor__(
-            self._modin_frame._map_reduce(
-                0, lambda df: df.memory_usage(**kwargs), lambda df: df.sum()
-            )
-        )
-
-    # END Full Reduce operations
+    # END Reduction operations
 
     # Map partitions operations
     # These operations are operations that apply a function to every partition.
@@ -631,28 +494,6 @@ class PandasQueryCompiler(BaseQueryCompiler):
         )
         return self.index[first_result]
 
-    def idxmax(self, **kwargs):
-        """Returns the first occurrence of the maximum over requested axis.
-
-        Returns:
-            A new QueryCompiler object containing the maximum of each column or axis.
-        """
-        axis = kwargs.get("axis", 0)
-        return self.__constructor__(
-            self._modin_frame._fold_reduce(axis, lambda df: df.idxmax(**kwargs))
-        )
-
-    def idxmin(self, **kwargs):
-        """Returns the first occurrence of the minimum over requested axis.
-
-        Returns:
-            A new QueryCompiler object containing the minimum of each column or axis.
-        """
-        axis = kwargs.get("axis", 0)
-        return self.__constructor__(
-            self._modin_frame._fold_reduce(axis, lambda df: df.idxmin(**kwargs))
-        )
-
     def last_valid_index(self):
         """Returns index of last non-NaN/NULL value.
 
@@ -676,79 +517,6 @@ class PandasQueryCompiler(BaseQueryCompiler):
             .squeeze()
         )
         return self.index[first_result]
-
-    def median(self, **kwargs):
-        """Returns median of each column or row.
-
-        Returns:
-            A new QueryCompiler object containing the median of each column or row.
-        """
-        # Pandas default is 0 (though not mentioned in docs)
-        axis = kwargs.get("axis", 0)
-        return self._modin_frame._fold_reduce(axis, lambda df: df.median(**kwargs))
-
-    def nunique(self, **kwargs):
-        """Returns the number of unique items over each column or row.
-
-        Returns:
-            A new QueryCompiler object of ints indexed by column or index names.
-        """
-        axis = kwargs.get("axis", 0)
-        return self._modin_frame._fold_reduce(axis, lambda df: df.nunique(**kwargs))
-
-    def quantile_for_single_value(self, **kwargs):
-        """Returns quantile of each column or row.
-
-        Returns:
-            A new QueryCompiler object containing the quantile of each column or row.
-        """
-        axis = kwargs.get("axis", 0)
-        q = kwargs.get("q", 0.5)
-        assert type(q) is float
-
-        def quantile_builder(df):
-            try:
-                return pandas.DataFrame.quantile(df, **kwargs)
-            except ValueError:
-                return pandas.Series()
-
-        result = self._modin_frame._fold_reduce(axis, quantile_builder)
-        if axis == 0:
-            result.index = [q]
-        else:
-            result.columns = [q]
-        return self.__constructor__(result)
-
-    def skew(self, **kwargs):
-        """Returns skew of each column or row.
-
-        Returns:
-            A new QueryCompiler object containing the skew of each column or row.
-        """
-        # Pandas default is 0 (though not mentioned in docs)
-        axis = kwargs.get("axis", 0)
-        return self._modin_frame._fold_reduce(axis, lambda df: df.skew(**kwargs))
-
-    def std(self, **kwargs):
-        """Returns standard deviation of each column or row.
-
-        Returns:
-            A new QueryCompiler object containing the standard deviation of each column
-            or row.
-        """
-        # Pandas default is 0 (though not mentioned in docs)
-        axis = kwargs.get("axis", 0)
-        return self._modin_frame._fold_reduce(axis, lambda df: df.std(**kwargs))
-
-    def var(self, **kwargs):
-        """Returns variance of each column or row.
-
-        Returns:
-            A new QueryCompiler object containing the variance of each column or row.
-        """
-        # Pandas default is 0 (though not mentioned in docs)
-        axis = kwargs.get("axis", 0)
-        return self._modin_frame._fold_reduce(axis, lambda df: df.var(**kwargs))
 
     # END Column/Row partitions reduce operations
 
@@ -790,28 +558,42 @@ class PandasQueryCompiler(BaseQueryCompiler):
     # that is being operated on. This means that we have to put all of that
     # data in the same place.
 
-    def _cumulative_builder(self, func, **kwargs):
-        axis = kwargs.get("axis", 0)
-        new_modin_frame = self._modin_frame._fold(axis, lambda df: func(df, **kwargs))
-        return self.__constructor__(new_modin_frame)
+    cummax = FoldFunction.register(pandas.DataFrame.cummax)
+    cummin = FoldFunction.register(pandas.DataFrame.cummin)
+    cumsum = FoldFunction.register(pandas.DataFrame.cumsum)
+    cumprod = FoldFunction.register(pandas.DataFrame.cumprod)
+    diff = FoldFunction.register(pandas.DataFrame.diff)
 
-    def cummax(self, **kwargs):
-        return self._cumulative_builder(pandas.DataFrame.cummax, **kwargs)
+    def dot(self, other):
+        """Computes the matrix multiplication of self and other.
 
-    def cummin(self, **kwargs):
-        return self._cumulative_builder(pandas.DataFrame.cummin, **kwargs)
+        Args:
+            other: The other query compiler or other array-like to matrix
+            multiply with self.
 
-    def cumsum(self, **kwargs):
-        return self._cumulative_builder(pandas.DataFrame.cumsum, **kwargs)
+        Returns:
+            Returns the result of the matrix multiply.
+        """
 
-    def cumprod(self, **kwargs):
-        return self._cumulative_builder(pandas.DataFrame.cumprod, **kwargs)
+        def map_func(df, other=other):
+            if isinstance(other, pandas.DataFrame):
+                other = other.squeeze()
+            result = df.squeeze().dot(other)
+            if is_list_like(result):
+                return pandas.DataFrame(result)
+            else:
+                return pandas.DataFrame([result])
 
-    def diff(self, **kwargs):
-        axis = kwargs.get("axis", 0)
-        return self.__constructor__(
-            self._modin_frame._fold(axis, lambda df: df.diff(**kwargs))
+        if len(self.columns) == 1:
+            axis = 0
+            new_index = ["__reduce__"]
+        else:
+            axis = 1
+            new_index = self.index
+        new_modin_frame = self._modin_frame._apply_full_axis(
+            axis, map_func, new_index=new_index, new_columns=["__reduced__"]
         )
+        return self.__constructor__(new_modin_frame)
 
     def eval(self, expr, **kwargs):
         """Returns a new QueryCompiler with expr evaluated on columns.
@@ -1451,13 +1233,15 @@ class PandasQueryCompiler(BaseQueryCompiler):
         # efficient if we are mapping over all of the data to do it this way
         # than it would be to reuse the code for specific columns.
         if len(columns) == len(self.columns):
-            new_modin_frame = self._modin_frame._fold(
-                0, lambda df: pandas.get_dummies(df, **kwargs)
+            new_modin_frame = self._modin_frame._apply_full_axis(
+                0, lambda df: pandas.get_dummies(df, **kwargs), new_index=self.index
             )
             untouched_frame = None
         else:
-            new_modin_frame = self._modin_frame.mask(col_indices=columns)._fold(
-                0, lambda df: pandas.get_dummies(df, **kwargs)
+            new_modin_frame = self._modin_frame.mask(
+                col_indices=columns
+            )._apply_full_axis(
+                0, lambda df: pandas.get_dummies(df, **kwargs), new_index=self.index
             )
             untouched_frame = self.drop(columns=columns)
         # If we mapped over all the data we are done. If not, we need to

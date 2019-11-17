@@ -18,7 +18,7 @@ from typing import Tuple, Union
 import warnings
 
 from modin.error_message import ErrorMessage
-from .utils import from_pandas, to_pandas, _inherit_docstrings
+from .utils import from_pandas, from_non_pandas, to_pandas, _inherit_docstrings
 from .iterator import PartitionIterator
 from .series import Series
 from .base import BasePandasDataset
@@ -61,6 +61,11 @@ class DataFrame(BasePandasDataset):
                 data._add_sibling(self)
         # Check type of data and use appropriate constructor
         elif query_compiler is None:
+            distributed_frame = from_non_pandas(data, index, columns, dtype)
+            if distributed_frame is not None:
+                self._query_compiler = distributed_frame._query_compiler
+                return
+
             warnings.warn(
                 "Distributing {} object. This may take some time.".format(type(data))
             )
@@ -373,13 +378,6 @@ class DataFrame(BasePandasDataset):
             elif mismatch:
                 raise KeyError(next(x for x in by if x not in self))
 
-        if by is None and level is not None and axis == 0:
-            if not isinstance(level, str):
-                by = self.axes[axis].names[level]
-                level = None
-            else:
-                by = level
-                level = None
         from .groupby import DataFrameGroupBy
 
         return DataFrameGroupBy(
@@ -1230,6 +1228,17 @@ class DataFrame(BasePandasDataset):
         if min_count > len(new_index):
             return Series(
                 [np.nan] * len(new_index), index=new_index, dtype=np.dtype("object")
+            )
+        if min_count > 1:
+            return self._reduce_dimension(
+                query_compiler=self._query_compiler.prod_min_count(
+                    axis=axis,
+                    skipna=skipna,
+                    level=level,
+                    numeric_only=numeric_only,
+                    min_count=min_count,
+                    **kwargs
+                )
             )
         return super(DataFrame, self).prod(
             axis=axis,

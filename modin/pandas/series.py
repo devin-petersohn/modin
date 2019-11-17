@@ -15,6 +15,13 @@ from .iterator import PartitionIterator
 from .utils import _inherit_docstrings
 from .utils import from_pandas, to_pandas
 
+if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
+    # Python >= 3.7
+    from re import Pattern as _pattern_type
+else:
+    # Python <= 3.6
+    from re import _pattern_type
+
 
 @_inherit_docstrings(pandas.Series, excluded=[pandas.Series, pandas.Series.__init__])
 class Series(BasePandasDataset):
@@ -691,7 +698,9 @@ class Series(BasePandasDataset):
 
         return self.__constructor__(
             query_compiler=self._query_compiler.applymap(
-                lambda s: arg(s) if not pandas.isnull(s) or na_action is None else s
+                lambda s: arg(s)
+                if pandas.isnull(s) is not True or na_action is None
+                else s
             )
         )
 
@@ -1432,9 +1441,7 @@ class StringMethods(object):
         )
 
     def count(self, pat, flags=0, **kwargs):
-        import re
-
-        if not isinstance(pat, (str, re._pattern_type)):
+        if not isinstance(pat, (str, _pattern_type)):
             raise TypeError("first argument must be string or compiled pattern")
         return Series(
             query_compiler=self._query_compiler.str_count(pat, flags=flags, **kwargs)
@@ -1447,18 +1454,14 @@ class StringMethods(object):
         return Series(query_compiler=self._query_compiler.str_endswith(pat, na=na))
 
     def findall(self, pat, flags=0, **kwargs):
-        import re
-
-        if not isinstance(pat, (str, re._pattern_type)):
+        if not isinstance(pat, (str, _pattern_type)):
             raise TypeError("first argument must be string or compiled pattern")
         return Series(
             query_compiler=self._query_compiler.str_findall(pat, flags=flags, **kwargs)
         )
 
     def match(self, pat, case=True, flags=0, na=np.NaN):
-        import re
-
-        if not isinstance(pat, (str, re._pattern_type)):
+        if not isinstance(pat, (str, _pattern_type)):
             raise TypeError("first argument must be string or compiled pattern")
         return Series(
             query_compiler=self._query_compiler.str_match(pat, flags=flags, na=na)
