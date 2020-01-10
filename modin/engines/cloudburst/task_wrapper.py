@@ -15,4 +15,6 @@ class CloudburstTask:
 
     @classmethod
     def materialize(cls, obj_id):
-        return droplet.get_object(obj_id)
+        if isinstance(obj_id, list):
+            return [o.get() for o in obj_id]
+        return obj_id.get()
