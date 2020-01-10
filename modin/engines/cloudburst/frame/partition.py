@@ -5,7 +5,8 @@ from modin import __execution_engine__
 
 if __execution_engine__ == "Cloudburst":
     from droplet.shared.reference import DropletReference
-    from modin.engines.cloudburst.utils import droplet
+    from modin.engines.cloudburst.utils import get_or_init_client
+    droplet = get_or_init_client()
 
 
 def apply_list_of_funcs(droplet, funcs, df):
