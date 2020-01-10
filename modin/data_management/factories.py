@@ -221,6 +221,13 @@ class PandasOnDaskFactory(BaseFactory):
     io_cls = PandasOnDaskIO
 
 
+class PandasOnCloudburstFactory(BaseFactory):
+
+    from modin.engines.cloudburst.io import PandasOnCloudburstIO
+
+    io_cls = PandasOnCloudburstIO
+
+
 class PyarrowOnRayFactory(BaseFactory):
 
     if partition_format == "Pyarrow" and not os.environ.get(
