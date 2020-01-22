@@ -22,10 +22,169 @@ from modin.error_message import ErrorMessage
 from modin.backends.pandas.parsers import find_common_type_cat as find_common_type
 
 
+def _compute_lengths(lengths_list, n, from_back=False):
+    """Computes the new lengths based on the lengths/widths of the previous and `n`.
+
+    Args:
+        lengths_list: The list of lengths or widths.
+        n: The number of rows or columns extracted.
+        from_back: Whether or not to compute from the back. Used in `tail`/`back`
+
+    Returns:
+         A list of lengths or widths of the resulting dataframe.
+    """
+    if not from_back:
+        idx = np.digitize(n, np.cumsum(lengths_list))
+        if idx == 0:
+            return [n]
+        return [
+            lengths_list[i] if i < idx else n - sum(lengths_list[:i])
+            for i in range(len(lengths_list))
+            if i <= idx
+        ]
+    else:
+        lengths_list = [i for i in lengths_list if i > 0]
+        idx = np.digitize(sum(lengths_list) - n, np.cumsum(lengths_list))
+        if idx == len(lengths_list) - 1:
+            return [n]
+        return [
+            lengths_list[i] if i > idx else n - sum(lengths_list[i + 1 :])
+            for i in range(len(lengths_list))
+            if i >= idx
+        ]
+
+
+class BaseQueryPlanner(object):
+    plan = dict()
+
+    @classmethod
+    def add_to_plan(cls, lazy_obj):
+        if lazy_obj not in cls.plan:
+            cls.plan[lazy_obj] = (
+                lazy_obj.parent,
+                lazy_obj.op,
+                lazy_obj.args,
+                lazy_obj.kwargs,
+            )
+
+    @classmethod
+    def execute_plan(cls, obj):
+        assert obj in cls.plan
+        if isinstance(
+            cls.plan[obj], (BasePandasFrame, pandas.DataFrame, pandas.Series)
+        ):
+            return cls.plan[obj]
+        parent, op, args, kwargs = cls.plan[obj]
+        if parent is not None:
+            if cls.rewrite_plan(obj):
+                return cls.plan[obj]
+            parent, op, args, kwargs = cls.plan[obj]
+            parent = cls.execute_plan(parent)
+            print("Executing {}".format(op))
+            cls.plan[obj] = op(parent, *args, **kwargs)
+            return cls.plan[obj]
+        else:
+            return obj
+
+    @classmethod
+    def rewrite_plan(cls, obj):
+        if isinstance(cls.plan[obj], BasePandasFrame):
+            return False
+        parent, op, args, kwargs = cls.plan[obj]
+        if isinstance(parent, LazyBasePandasFrame):
+            cls.rewrite_plan(parent)
+            parent, op, args, kwargs = cls.plan[obj]
+        if op == BasePandasFrame.mask:
+            if isinstance(
+                cls.plan[parent], (BasePandasFrame, pandas.DataFrame, pandas.Series)
+            ):
+                return False
+            parent_parent, parent_op, parent_args, parent_kwargs = cls.plan[parent]
+            if parent_op in [BasePandasFrame._map, BasePandasFrame._map_reduce]:
+                if not isinstance(
+                    parent_parent, (BasePandasFrame, pandas.DataFrame, pandas.Series)
+                ):
+                    return False
+                print("Rewrite {} before {}".format(op, parent_op))
+                print("Executing {}".format(parent_op))
+                cls.plan[obj] = parent_op(
+                    op(parent_parent, *args, **kwargs), *parent_args, **parent_kwargs
+                )
+                return True
+            elif parent_op == BasePandasFrame.mask:
+                if isinstance(parent_parent, LazyBasePandasFrame):
+                    print("Rewrite masks")
+                    cls.plan[obj] = parent_parent, op, args, {**kwargs, **parent_kwargs}
+                    return cls.rewrite_plan(obj)
+                print("Combine masks")
+                cls.plan[obj] = op(parent_parent, *args, **kwargs, **parent_kwargs)
+                return True
+        if op == BasePandasFrame._map:
+            if isinstance(cls.plan[parent], BasePandasFrame):
+                return False
+            parent_parent, parent_op, parent_args, parent_kwargs = cls.plan[parent]
+            if parent_op in [BasePandasFrame._map, BasePandasFrame._map_reduce]:
+                if isinstance(parent_parent, LazyBasePandasFrame):
+                    "Lazy"
+                    return False
+                parent_mapper = parent_args[0]
+                self_mapper = args[0]
+                parent_dtypes = parent_kwargs.get("dtypes", None)
+                self_dtypes = kwargs.get("dtypes", None)
+                if parent_dtypes == "copy":
+                    new_dtypes = self_dtypes
+                elif parent_dtypes is None:
+                    new_dtypes = None
+                elif parent_dtypes == np.bool:
+                    if self_dtypes == "copy" or self_dtypes == np.bool:
+                        new_dtypes = np.bool
+                    elif self_dtypes is None:
+                        new_dtypes = None
+                    else:
+                        raise ValueError("Dtypes not recognized: {} and {}".format(parent_dtypes, self_dtypes))
+                else:
+                    raise ValueError("Dtypes not recognized: {} and {}".format(parent_dtypes, self_dtypes))
+                print("Combine maps")
+                cls.plan[obj] = (parent_parent, op, (lambda g: self_mapper(parent_mapper(g)),), dict(dtypes=new_dtypes))
+                return False
+        return False
+
+
 class BasePandasFrame(object):
 
     _frame_mgr_cls = None
     _query_compiler_cls = PandasQueryCompiler
+
+    def __getattribute__(self, item):
+        try:
+            op = getattr(BasePandasFrame, item)
+        except AttributeError:
+            op = None
+        if not callable(op) or item in [
+            "__init__",
+            "__constructor__",
+            "__class__",
+            "to_pandas",
+            "_row_lengths",
+            "_column_widths",
+            "dtypes",
+            "axes",
+            "_dtypes",
+            "_compute_map_reduce_metadata",
+            "_build_mapreduce_func",
+            "_join_index_objects",
+            "_filter_empties",
+            "_apply_index_objs",
+            "_get_dict_of_block_index",
+        ]:
+            return object.__getattribute__(self, item)
+
+        def lazy_call(*args, **kwargs):
+            new_lazy_frame = LazyBasePandasFrame.create(self, op, args, kwargs)
+            BaseQueryPlanner.add_to_plan(new_lazy_frame)
+            return new_lazy_frame
+
+        return lazy_call
 
     @property
     def __constructor__(self):
@@ -74,6 +233,7 @@ class BasePandasFrame(object):
         self._column_widths_cache = column_widths
         self._dtypes = dtypes
         self._filter_empties()
+        BaseQueryPlanner.plan[self] = self
 
     @property
     def _row_lengths(self):
@@ -1344,3 +1504,86 @@ class BasePandasFrame(object):
             self._row_lengths,
             dtypes=new_dtypes,
         )
+
+
+def get_name(args):
+    return tuple([a._pandas_func if hasattr(a, "_pandas_func") else a for a in args])
+
+
+class LazyBasePandasFrame(BasePandasFrame):
+    parent = op = args = kwargs = None
+
+    lazy_obj_cache = dict()
+    lazy_call_cache = dict()
+
+    @classmethod
+    def add_to_call_cache(cls, parent, op, args, kwargs):
+        args = get_name(args)
+        if op not in cls.lazy_call_cache:
+            cls.lazy_call_cache[op] = dict()
+        if parent not in cls.lazy_call_cache[op]:
+            cls.lazy_call_cache[op][parent] = [(args, kwargs)]
+        else:
+            cls.lazy_call_cache[op][parent] += [(args, kwargs)]
+
+    @classmethod
+    def add_to_obj_cache(cls, parent, op, lazy_obj):
+        if op not in cls.lazy_obj_cache:
+            cls.lazy_obj_cache[op] = dict()
+        if parent not in cls.lazy_obj_cache[op]:
+            cls.lazy_obj_cache[op][parent] = [lazy_obj]
+        else:
+            cls.lazy_obj_cache[op][parent] += [lazy_obj]
+
+    @classmethod
+    def create(cls, parent, op, args, kwargs):
+        original_args = args
+        args = get_name(args)
+        if op in cls.lazy_call_cache and parent in cls.lazy_call_cache[op]:
+            if (args, kwargs) in cls.lazy_call_cache[op][parent]:
+                idx = cls.lazy_call_cache[op][parent].index((args, kwargs))
+                return cls.lazy_obj_cache[op][parent][idx]
+        return cls(parent, op, original_args, kwargs)
+
+    @classmethod
+    def infer_metadata(cls, parent, op, args, kwargs, axis):
+        if op == BasePandasFrame.mask:
+            if axis == "index":
+                return parent.index
+            if axis == "columns":
+                if kwargs.get("col_indices", None) is not None:
+                    return pandas.Index(kwargs.get("col_indices"))
+                else:
+                    return parent.columns[kwargs.get("col_numeric_idx")]
+        elif op == BasePandasFrame._map:
+            if axis == "index":
+                return parent.index
+            if axis == "columns":
+                return parent.columns
+        raise ValueError("{} not yet supported".format(op))
+
+    def __init__(self, parent, op, args, kwargs):
+        self.parent = parent
+        self.op = op
+        self.args = args
+        self.kwargs = kwargs
+        LazyBasePandasFrame.add_to_call_cache(parent, op, args, kwargs)
+        LazyBasePandasFrame.add_to_obj_cache(parent, op, self)
+        BaseQueryPlanner.add_to_plan(self)
+
+    def __getattribute__(self, item):
+        op = getattr(LazyBasePandasFrame, item)
+        if not callable(op) or item in [
+            "__init__",
+            "__constructor__",
+            "__class__",
+            "to_pandas",
+        ]:
+            if item in ["parent", "op", "args", "kwargs"]:
+                return object.__getattribute__(self, item)
+            elif item in ["index", "columns"]:
+                return LazyBasePandasFrame.infer_metadata(
+                    self.parent, self.op, self.args, self.kwargs, item
+                )
+            return object.__getattribute__(BaseQueryPlanner.execute_plan(self), item)
+        return super(LazyBasePandasFrame, self).__getattribute__(item)
