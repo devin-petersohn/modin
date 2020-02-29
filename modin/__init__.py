@@ -23,6 +23,8 @@ def get_execution_engine():
     # decide these things. In the meantime, we will use the currently supported
     # execution engine + backing (Pandas + Ray).
     if "MODIN_ENGINE" in os.environ:
+        if os.environ["MODIN_ENGINE"].title() == "Mpi":
+            return "MPI"
         # .title allows variants like ray, RAY, Ray
         return os.environ["MODIN_ENGINE"].title()
     else:

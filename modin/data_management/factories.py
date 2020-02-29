@@ -221,6 +221,12 @@ class PandasOnDaskFactory(BaseFactory):
     io_cls = PandasOnDaskIO
 
 
+class PandasOnMPIFactory(BaseFactory):
+
+    from modin.engines.mpi4py.io import PandasOnMPIIO
+
+    io_cls = PandasOnMPIIO
+
 class PyarrowOnRayFactory(BaseFactory):
 
     if partition_format == "Pyarrow" and not os.environ.get(

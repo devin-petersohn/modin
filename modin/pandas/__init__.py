@@ -232,6 +232,12 @@ elif execution_engine == "Dask":  # pragma: no cover
 
             num_cpus = multiprocessing.cpu_count()
             client = Client(n_workers=num_cpus)
+elif execution_engine == "MPI":
+    from modin.engines.mpi4py import _get_global_executor
+    import multiprocessing
+
+    num_cpus = multiprocessing.cpu_count()
+    _get_global_executor()
 elif execution_engine != "Python":
     raise ImportError("Unrecognized execution engine: {}.".format(execution_engine))
 
