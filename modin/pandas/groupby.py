@@ -272,7 +272,16 @@ class DataFrameGroupBy(object):
             # so we throw a different message
             raise NotImplementedError("axis other than 0 is not supported")
 
-        if is_list_like(arg):
+        if isinstance(arg, dict):
+            if any(k not in self._df.columns for k in arg.keys()):
+                raise ValueError(next(k for k in arg.keys() if k not in self._df.columns))
+
+            def agg_dict(df):
+                func = {k:v for k, v in arg.items() if k in df._selected_obj.columns}
+                return df.agg(func, *args, **kwargs)
+
+            return self._apply_agg_function(agg_dict, drop=self._as_index)
+        elif is_list_like(arg):
             return self._default_to_pandas(
                 lambda df: df.aggregate(arg, *args, **kwargs)
             )
