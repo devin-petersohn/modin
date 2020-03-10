@@ -17,7 +17,7 @@ def get_default_chunksize(length, num_splits):
     )
 
 
-def compute_chunksize(df, num_splits, default_block_size=32, axis=None):
+def compute_chunksize(df, num_splits, default_block_size=1, axis=None):
     """Computes the number of rows and/or columns to include in each partition.
 
     Args:
