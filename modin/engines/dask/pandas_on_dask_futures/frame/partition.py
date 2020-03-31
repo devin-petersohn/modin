@@ -19,13 +19,10 @@ from modin import __execution_engine__
 
 if __execution_engine__ == "Dask":
     from distributed.client import get_client
-    import cloudpickle as pkl
 
 
 def apply_list_of_funcs(funcs, df):
     for func, kwargs in funcs:
-        if isinstance(func, bytes):
-            func = pkl.loads(func)
         df = func(df, **kwargs)
     return df
 
@@ -78,16 +75,17 @@ class PandasOnDaskFramePartition(BaseFramePartition):
              A new `BaseFramePartition` containing the object that has had `func`
              applied to it.
         """
-        func = pkl.dumps(func)
         call_queue = self.call_queue + [[func, kwargs]]
-        future = get_client().submit(
-            apply_list_of_funcs, call_queue, self.future, pure=False
+        f = self.future
+        client = self.future.client if hasattr(self.future, "client") else get_client()
+        future = client.submit(
+            apply_list_of_funcs, call_queue, f, pure=False
         )
         return PandasOnDaskFramePartition(future)
 
     def add_to_apply_calls(self, func, **kwargs):
         return PandasOnDaskFramePartition(
-            self.future, call_queue=self.call_queue + [[pkl.dumps(func), kwargs]]
+            self.future, call_queue=self.call_queue + [[func, kwargs]]
         )
 
     def drain_call_queue(self):

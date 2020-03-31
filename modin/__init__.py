@@ -99,3 +99,99 @@ del get_partition_format
 
 __version__ = get_versions()["version"]
 del get_versions
+
+
+from IPython.core.magic import line_cell_magic, magics_class, needs_local_scope
+from IPython.core.magics.execution import ExecutionMagics
+from IPython import get_ipython
+import re
+import ast
+if sys.version_info > (3,8):
+    from ast import Module
+else:
+    from ast import Module as OriginalModule
+    Module = lambda nodelist, type_ignores: OriginalModule(nodelist)
+
+
+_clusters = {}
+ipython = get_ipython()
+
+
+def register_cluster(name, ip, *args):
+    if name in _clusters:
+        teardown_cluster(name)
+    ip_match = re.search(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", ip)
+    if ip_match is None:
+        raise ValueError("Invalid Cluster IP")
+    _clusters[name] = ip
+
+
+def teardown_cluster(name):
+    del _clusters[name]
+
+
+@magics_class
+class ModinMagics(ExecutionMagics):
+    @line_cell_magic
+    @needs_local_scope
+    def deploy_modin_to(self, line, cell=None, local_ns=None):
+        first_arg = line.split(" ")[0]
+        line = " ".join(line.split(" ")[1:])
+        if first_arg not in _clusters:
+            raise ValueError("No such cluster: {}".format(first_arg))
+        print("Distributing {} to {}".format(line, first_arg))
+        from distributed import Client, get_client
+        original_client = get_client()
+        Client(_clusters[first_arg])
+
+        if cell:
+            expr = self.shell.transform_cell(cell)
+        else:
+            expr = self.shell.transform_cell(line)
+
+        expr_ast = self.shell.compile.ast_parse(expr)
+        # Apply AST transformations
+        expr_ast = self.shell.transform_ast(expr_ast)
+
+        expr_val = None
+        if len(expr_ast.body) == 1 and isinstance(expr_ast.body[0], ast.Expr):
+            mode = 'eval'
+            source = '<distributed eval>'
+            expr_ast = ast.Expression(expr_ast.body[0].value)
+        else:
+            mode = 'exec'
+            source = '<distributed exec>'
+            # multi-line %%time case
+            if len(expr_ast.body) > 1 and isinstance(expr_ast.body[-1], ast.Expr):
+                expr_val = expr_ast.body[-1]
+                expr_ast = expr_ast.body[:-1]
+                expr_ast = Module(expr_ast, [])
+                expr_val = ast.Expression(expr_val.value)
+
+        code = self.shell.compile(expr_ast, source, mode)
+
+        # skew measurement as little as possible
+        glob = self.shell.user_ns
+        if mode == 'eval':
+            try:
+                out = eval(code, glob, local_ns)
+            except:
+                self.shell.showtraceback()
+                return
+        else:
+            try:
+                exec(code, glob, local_ns)
+                out = None
+                if expr_val is not None:
+                    code_2 = self.shell.compile(expr_val, source, 'eval')
+                    out = eval(code_2, glob, local_ns)
+            except:
+                self.shell.showtraceback()
+                return
+        Client(original_client.scheduler.addr)
+        return out
+
+try:
+    ipython.register_magics(ModinMagics)
+except:
+    pass

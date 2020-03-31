@@ -35,7 +35,7 @@ class PandasOnDaskFrameAxisPartition(PandasFrameAxisPartition):
     def deploy_axis_func(
         cls, axis, func, num_splits, kwargs, maintain_partitioning, *partitions
     ):
-        client = get_client()
+        client = partitions[0].client if hasattr(partitions[0], "client") else get_client()
         axis_result = client.submit(
             PandasFrameAxisPartition.deploy_axis_func,
             axis,
@@ -59,7 +59,7 @@ class PandasOnDaskFrameAxisPartition(PandasFrameAxisPartition):
     def deploy_func_between_two_axis_partitions(
         cls, axis, func, num_splits, len_of_left, kwargs, *partitions
     ):
-        client = get_client()
+        client = partitions[0].client if hasattr(partitions[0], "client") else get_client()
         axis_result = client.submit(
             PandasFrameAxisPartition.deploy_func_between_two_axis_partitions,
             axis,
