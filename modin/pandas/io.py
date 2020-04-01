@@ -106,9 +106,16 @@ def _make_parser_func(sep):
         float_precision=None,
     ):
         _, _, _, kwargs = inspect.getargvalues(inspect.currentframe())
-        if not kwargs.get("sep", sep):
-            kwargs["sep"] = "\t"
-        return _read(**kwargs)
+        args, _, _, defaults, _, _, _ = inspect.getfullargspec(parser_func)
+        defaults = dict(zip(args[2:], defaults))
+        filtered_kwargs = {
+            kw: kwargs[kw]
+            for kw in kwargs
+            if kw in defaults
+               and (not isinstance(kwargs[kw], type(defaults[kw]))
+               or kwargs[kw] != defaults[kw])
+        }
+        return _read(filepath_or_buffer=filepath_or_buffer, **filtered_kwargs)
 
     return parser_func
 

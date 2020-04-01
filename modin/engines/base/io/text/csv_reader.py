@@ -105,7 +105,7 @@ class CSVReader(TextFileReader):
         partition_kwargs = dict(
             kwargs,
             header=None,
-            names=names,
+            # names=names,
             skipfooter=0,
             skiprows=None,
             parse_dates=parse_dates,

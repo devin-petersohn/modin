@@ -20,6 +20,7 @@ from modin.engines.base.io import FileReader
 from modin.data_management.utils import split_result_of_axis_func_pandas
 from modin.error_message import ErrorMessage
 from io import BytesIO
+from pyarrow import csv
 
 
 def _split_result_for_readers(axis, num_splits, df):  # pragma: no cover
@@ -92,11 +93,11 @@ class PandasCSVParser(PandasParser):
             if kwargs.get("encoding", None) is not None:
                 header = b"" + bio.readline()
             else:
-                header = b""
+                header = b"" + bio.readline()
             bio.seek(start)
             to_read = header + bio.read(end - start)
             bio.close()
-            pandas_df = pandas.read_csv(BytesIO(to_read), **kwargs)
+            pandas_df = csv.read_csv(BytesIO(to_read)).to_pandas()  # pandas.read_csv(BytesIO(to_read), **kwargs)
         else:
             # This only happens when we are reading with only one worker (Default)
             return pandas.read_csv(fname, **kwargs)
