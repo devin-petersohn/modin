@@ -135,7 +135,7 @@ class CSVReader(TextFileReader):
             # Launch tasks to read partitions
             partition_ids = []
             index_ids = []
-            dtypes_ids = []
+            # dtypes_ids = []
             total_bytes = cls.file_size(f)
             # Max number of partitions available
             from modin.pandas import DEFAULT_NPARTITIONS
@@ -170,11 +170,11 @@ class CSVReader(TextFileReader):
                     **partition_kwargs,
                 }
                 partition_id = cls.call_deploy(
-                    f, chunk_size, num_splits + 2, args, quotechar=quotechar
+                    f, chunk_size, num_splits + 1, args, quotechar=quotechar
                 )
-                partition_ids.append(partition_id[:-2])
-                index_ids.append(partition_id[-2])
-                dtypes_ids.append(partition_id[-1])
+                partition_ids.append(partition_id[:-1])
+                index_ids.append(partition_id[-1])
+                # dtypes_ids.append(partition_id[-1])
 
         # Compute the index based on a sum of the lengths of each partition (by default)
         # or based on the column(s) that were requested.
@@ -196,7 +196,7 @@ class CSVReader(TextFileReader):
         # reported dtypes from differing rows can be different based on the inference in
         # the limited data seen by each worker. We use pandas to compute the exact dtype
         # over the whole column for each column. The index is set below.
-        dtypes = cls.get_dtypes(dtypes_ids)
+        # dtypes = cls.get_dtypes(dtypes_ids)
 
         partition_ids = cls.build_partition(partition_ids, row_lengths, column_widths)
         # If parse_dates is present, the column names that we have might not be
@@ -218,17 +218,17 @@ class CSVReader(TextFileReader):
                 for new_col_name, group in parse_dates.items():
                     column_names = column_names.drop(group).insert(0, new_col_name)
         # Set the index for the dtypes to the column names
-        if isinstance(dtypes, pandas.Series):
-            dtypes.index = column_names
-        else:
-            dtypes = pandas.Series(dtypes, index=column_names)
+        # if isinstance(dtypes, pandas.Series):
+        #     dtypes.index = column_names
+        # else:
+        #     dtypes = pandas.Series(dtypes, index=column_names)
         new_frame = cls.frame_cls(
             partition_ids,
             new_index,
             column_names,
             row_lengths,
             column_widths,
-            dtypes=dtypes,
+            # dtypes=dtypes,
         )
         new_query_compiler = cls.query_compiler_cls(new_frame)
 

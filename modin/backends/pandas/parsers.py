@@ -108,7 +108,7 @@ class PandasCSVParser(PandasParser):
             index = len(pandas_df)
         return _split_result_for_readers(1, num_splits, pandas_df) + [
             index,
-            pandas_df.dtypes,
+            # pandas_df.dtypes,
         ]
 
 
