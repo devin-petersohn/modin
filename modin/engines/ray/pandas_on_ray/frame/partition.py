@@ -12,6 +12,7 @@
 # governing permissions and limitations under the License.
 
 import pandas
+import numpy
 
 from modin.engines.base.frame.partition import BaseFramePartition
 from modin.data_management.utils import length_fn_pandas, width_fn_pandas
@@ -101,7 +102,7 @@ class PandasOnRayFramePartition(BaseFramePartition):
         Returns:
             A NumPy array.
         """
-        return self.apply(lambda df: df.values).get()
+        return self.apply(lambda df: numpy.array(df)).get()
 
     def mask(self, row_indices, col_indices):
         if (

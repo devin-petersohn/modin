@@ -12,6 +12,7 @@
 # governing permissions and limitations under the License.
 
 import pandas
+import numpy
 
 from .partition_manager import PandasOnRayFrameManager
 from modin.engines.base.frame.data import BasePandasFrame
@@ -39,3 +40,12 @@ class PandasOnRayFrame(BasePandasFrame):
         )
         dtypes.index = column_names
         return dtypes
+
+    def to_modin_array(self):
+        from modin.engines.ray.pandas_on_ray.array.data import ModinonRayArray
+
+        return ModinonRayArray(
+            self._frame_mgr_cls.lazy_map_partitions(self._partitions, lambda df: numpy.array(df)),
+            row_lengths=self._row_lengths_cache,
+            col_widths=self._column_widths_cache,
+        )

@@ -32,7 +32,7 @@ class RayFrameManager(BaseFrameManager):
         """
         parts = ray.get(
             [
-                obj.apply(lambda df: df.to_numpy()).oid
+                obj.apply(lambda df: np.array(df)).oid
                 for row in partitions
                 for obj in row
             ]

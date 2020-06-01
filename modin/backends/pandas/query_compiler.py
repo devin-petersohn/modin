@@ -183,6 +183,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
         )
         return arr
 
+    def to_array_compiler(self):
+        from modin.backends.numpy.query_compiler import NumpyQueryCompiler
+
+        return NumpyQueryCompiler(self._modin_frame.to_modin_array())
     # END To NumPy
 
     # Binary operations (e.g. add, sub)
