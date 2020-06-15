@@ -1455,7 +1455,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
     # Indexing
     def view(self, index=None, columns=None):
         return self.__constructor__(
-            self._modin_frame.mask(row_numeric_idx=index, col_numeric_idx=columns)
+            self._modin_frame.mask(row_numeric_idx=list(index), col_numeric_idx=list(columns))
         )
 
     def write_items(self, row_numeric_index, col_numeric_index, broadcasted_items):

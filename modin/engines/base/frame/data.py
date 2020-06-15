@@ -125,7 +125,6 @@ class BaseQueryPlanner(object):
             parent_parent, parent_op, parent_args, parent_kwargs = cls.plan[parent]
             if parent_op in [BasePandasFrame._map, BasePandasFrame._map_reduce]:
                 if isinstance(parent_parent, LazyBasePandasFrame):
-                    "Lazy"
                     return False
                 parent_mapper = parent_args[0]
                 self_mapper = args[0]
@@ -1560,6 +1559,22 @@ class LazyBasePandasFrame(BasePandasFrame):
                 return parent.index
             if axis == "columns":
                 return parent.columns
+        elif op == BasePandasFrame._map_reduce:
+            if kwargs.get("axis", 0) == 0:
+                if axis == "index":
+                    return parent.index
+                else:
+                    return pandas.Index(["__reduced__"])
+            else:
+                if axis == "index":
+                    return pandas.Index(["__reduced__"])
+                else:
+                    return parent.columns
+        elif op == BasePandasFrame.transpose:
+            if axis == "index":
+                return parent.columns
+            else:
+                return parent.index
         raise ValueError("{} not yet supported".format(op))
 
     def __init__(self, parent, op, args, kwargs):
