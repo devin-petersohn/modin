@@ -67,7 +67,7 @@ class ModinXGBoostActor:
     def add_eval_X_y(self, *X, y, eval_method):
         if len(X) > 1:
             X = pandas.concat(list(X), axis=1)
-        self._evals.append((X, eval_method))
+        self._evals.append((xgb.DMatrix(X, y), eval_method))
 
     def train(self, rabit_args, params, *args, **kwargs):
         local_params = params.copy()
