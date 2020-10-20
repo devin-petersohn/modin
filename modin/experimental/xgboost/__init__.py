@@ -145,7 +145,7 @@ def train(
         for _, ((eval_X, eval_y), eval_method) in enumerate(evals):
             actor.add_eval_X_y.remote(
                 *[part.oid for part in eval_X._query_compiler._modin_frame._partitions[i]],
-                y=eval_y._query_compiler._modin_frame.partitions[i][0].oid,
+                y=eval_y._query_compiler._modin_frame._partitions[i][0].oid,
                 eval_method=eval_method
             )
 
