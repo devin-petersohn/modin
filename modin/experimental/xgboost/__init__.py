@@ -70,9 +70,11 @@ class ModinXGBoostActor:
         self._evals.append((xgb.DMatrix(X, y), eval_method))
 
     def train(self, rabit_args, params, *args, **kwargs):
-        local_params = params.copy()
+        local_params = params
         local_dtrain = self._dtrain
         local_evals = self._evals
+        if len(local_evals) == 0:
+            local_evals = None
 
         evals_result = dict()
 
@@ -96,7 +98,6 @@ class ModinDMatrix(object):
     def __iter__(self):
         yield self.X
         yield self.y
-
 
 
 def train(
@@ -144,8 +145,8 @@ def train(
         )
         for _, ((eval_X, eval_y), eval_method) in enumerate(evals):
             actor.add_eval_X_y.remote(
-                *[part.oid for part in eval_X._query_compiler._modin_frame._partitions[0]],
-                y=eval_y._query_compiler._modin_frame._partitions[0][0].oid,
+                *[part.oid for part in eval_X._query_compiler._modin_frame._partitions[i]],
+                y=eval_y._query_compiler._modin_frame._partitions[i][0].oid,
                 eval_method=eval_method
             )
 
