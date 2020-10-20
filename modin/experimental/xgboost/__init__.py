@@ -88,9 +88,20 @@ class ModinXGBoostActor:
             return {"bst": bst, "evals_result": evals_result}
 
 
+class ModinDMatrix(object):
+    def __init__(self, X, y):
+        self.X = X
+        self.y = y
+
+    def __iter__(self):
+        yield self.X
+        yield self.y
+
+
+
 def train(
     params: Dict,
-    data: Tuple[pd.DataFrame],
+    data: ModinDMatrix,
     *args,
     evals=(),
     num_actors: Optional[int] = None,
@@ -105,12 +116,14 @@ def train(
         left_frame._partitions.shape[0] == right_frame._partitions.shape[0]
     ), "Unaligned train data"
     if len(evals):
-        left_eval_frame = evals[0]._query_compiler._modin_frame
-        right_eval_frame = evals[1]._query_compiler._modin_frame
-        assert (
-            left_eval_frame._partitions.shape[0]
-            == right_eval_frame._partitions.shape[0]
-        ), "Unaligned test data"
+        for eval in evals:
+            eval_X, eval_y = eval[0]
+            left_eval_frame = eval_X._query_compiler._modin_frame
+            right_eval_frame = eval_y._query_compiler._modin_frame
+            assert (
+                left_eval_frame._partitions.shape[0]
+                == right_eval_frame._partitions.shape[0]
+            ), "Unaligned test data"
     if num_actors is None:
         num_actors = left_frame._partitions.shape[0]
 
@@ -129,16 +142,12 @@ def train(
             *[part.oid for part in left_frame._partitions[i]],
             y=right_frame._partitions[i][0].oid
         )
-        for i, ((eval_X, eval_y), eval_method) in enumerate(evals):
-            if eval_method.lower() == "train":
-                actor.add_eval_X_y.remote(
-                    *[part.oid for part in left_eval_frame._partitions[i]],
-                    eval_method=eval_method
-                )
-            elif eval_method.lower() == "eval":
-                actor.add_eval_X_y.remote(
-                    *[right_eval_frame._partitions[i][0].oid], eval_method=eval_method
-                )
+        for _, ((eval_X, eval_y), eval_method) in enumerate(evals):
+            actor.add_eval_X_y.remote(
+                *[part.oid for part in eval_X._partitions[i]],
+                y=eval_y.partitions[i][0].oid,
+                eval_method=eval_method
+            )
 
     # Start tracker
     env = _start_rabit_tracker(num_actors)
