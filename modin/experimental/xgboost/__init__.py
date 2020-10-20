@@ -73,8 +73,6 @@ class ModinXGBoostActor:
         local_params = params
         local_dtrain = self._dtrain
         local_evals = self._evals
-        if len(local_evals) == 0:
-            local_evals = None
 
         evals_result = dict()
 
@@ -145,8 +143,8 @@ def train(
         )
         for j, ((eval_X, eval_y), eval_method) in enumerate(evals):
             actor.add_eval_X_y.remote(
-                *[part.oid for part in eval_X._query_compiler._modin_frame._partitions[j]],
-                y=eval_y._query_compiler._modin_frame._partitions[j][0].oid,
+                *[part.oid for part in eval_X._query_compiler._modin_frame._partitions[0]],
+                y=eval_y._query_compiler._modin_frame._partitions[0][0].oid,
                 eval_method=eval_method
             )
 
