@@ -64,7 +64,7 @@ class ModinXGBoostActor:
         X = pandas.concat(list(X), axis=1)
         self._dtrain = xgb.DMatrix(X, y)
 
-    def add_eval_X_y(self, *X, eval_method):
+    def add_eval_X_y(self, *X, y, eval_method):
         if len(X) > 1:
             X = pandas.concat(list(X), axis=1)
         self._evals.append((X, eval_method))
