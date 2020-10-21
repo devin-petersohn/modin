@@ -62,11 +62,10 @@ class ModinXGBoostActor:
         self._evals = []
 
     def set_X_y(self, *X, y):
+        s = time.time()
         X = pandas.concat(list(X), axis=1)
-        try:
-            self._dtrain = xgb.DMatrix(X, y)
-        except:
-            print("Error")
+        print("Concat: {}".format(s - time.time()))
+        self._dtrain = xgb.DMatrix(X, y)
 
     def add_eval_X_y(self, *X, y, eval_method):
         if len(X) > 1:
@@ -82,6 +81,7 @@ class ModinXGBoostActor:
 
         evals_result = dict()
 
+        s = time.time()
         with RabitContext(str(id(self)), rabit_args):
             bst = xgb.train(
                 local_params,
@@ -91,6 +91,7 @@ class ModinXGBoostActor:
                 evals_result=evals_result,
                 **kwargs
             )
+            print("Local Train: {}".format(s - time.time()))
             return {"bst": bst, "evals_result": evals_result}
 
 
