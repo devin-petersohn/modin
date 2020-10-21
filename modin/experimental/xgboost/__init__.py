@@ -93,7 +93,7 @@ class ModinXGBoostActor:
             return {"bst": bst, "evals_result": evals_result}
 
 
-class ModinDMatrix(object):
+class ModinDMatrix(xgb.DMatrix):
     def __init__(self, X, y):
         self.X = X
         self.y = y
