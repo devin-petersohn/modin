@@ -9,16 +9,8 @@ import time
 if os.environ.get("MODIN_ENGINE", "Ray").title() == "Ray":
     import ray
     from ray.services import get_node_ip_address
-    import modin.pandas as pd
-
 else:
     raise ValueError("Ray must be set as MODIN_ENGINE")
-
-
-def _assert_modin_engine_ray():
-    assert (
-        os.environ.get("MODIN_ENGINE", "Ray").title() == "Ray"
-    ), "MODIN_ENGINE environment variable must be set to Ray"
 
 
 def _start_rabit_tracker(num_workers: int):
@@ -46,7 +38,7 @@ class RabitContext:
 
     def __init__(self, actor_id, args):
         self.args = args
-        self.args.append(("DMLC_TASK_ID=[xgboost.ray]:" + actor_id).encode())
+        self.args.append(("DMLC_TASK_ID=[xgboost.modin]:" + actor_id).encode())
 
     def __enter__(self):
         xgb.rabit.init(self.args)
@@ -64,7 +56,7 @@ class ModinXGBoostActor:
     def set_X_y(self, *X, y):
         s = time.time()
         X = pandas.concat(list(X), axis=1)
-        print("Concat: {}".format(s - time.time()))
+        print("Concat: {}".format(time.time() - s))
         self._dtrain = xgb.DMatrix(X, y)
 
     def add_eval_X_y(self, *X, y, eval_method):
@@ -91,7 +83,7 @@ class ModinXGBoostActor:
                 evals_result=evals_result,
                 **kwargs
             )
-            print("Local Train: {}".format(s - time.time()))
+            print("Local Train: {}".format(time.time() - s))
             return {"bst": bst, "evals_result": evals_result}
 
 
