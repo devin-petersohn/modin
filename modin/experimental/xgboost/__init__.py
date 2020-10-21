@@ -1,9 +1,10 @@
 from threading import Thread
-from typing import Tuple, Dict, Any, Optional
+from typing import Dict, Any, Optional
 
 import xgboost as xgb
 import os
 import pandas
+import time
 
 if os.environ.get("MODIN_ENGINE", "Ray").title() == "Ray":
     import ray
@@ -112,6 +113,8 @@ def train(
     gpus_per_worker: Optional[int] = None,
     **kwargs
 ):
+    print("Start")
+    s = time.time()
     X, y = data
     assert len(X) == len(y)
     left_frame = X._query_compiler._modin_frame
@@ -120,8 +123,7 @@ def train(
         left_frame._partitions.shape[0] == right_frame._partitions.shape[0]
     ), "Unaligned train data"
     if len(evals):
-        for eval in evals:
-            eval_X, eval_y = eval[0]
+        for ((eval_X, eval_y), _) in evals:
             left_eval_frame = eval_X._query_compiler._modin_frame
             right_eval_frame = eval_y._query_compiler._modin_frame
             assert (
@@ -155,7 +157,8 @@ def train(
     for row in right_frame._partitions:
         for part in row:
             part.drain_call_queue()
-
+    print("Init and error checking: {}".format(time.time() - s))
+    s = time.time()
     # Split data across workers
     for i, actor in enumerate(actors):
         actor.set_X_y.remote(
@@ -168,18 +171,20 @@ def train(
                 y=eval_y._query_compiler._modin_frame._partitions[0][0].oid,
                 eval_method=eval_method
             )
-
+    print("Add data: {}".format(time.time() - s))
+    s = time.time()
     # Start tracker
     env = _start_rabit_tracker(num_actors)
     rabit_args = [("%s=%s" % item).encode() for item in env.items()]
 
     # Train
     fut = [actor.train.remote(rabit_args, params, *args, **kwargs) for actor in actors]
-
+    print("Train: {}".format(time.time() - s))
+    s = time.time()
     # All results should be the same because of Rabit tracking. So we just
     # return the first one.
     res: Dict[str, Any] = ray.get(fut[0])
     bst = res["bst"]
     evals_result = res["evals_result"]
-
+    print("Get: {}".format(time.time() - s))
     return bst, evals_result
