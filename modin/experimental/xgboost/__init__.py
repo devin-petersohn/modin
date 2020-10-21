@@ -129,10 +129,10 @@ def train(
                 == right_eval_frame._partitions.shape[0]
             ), "Unaligned test data"
             # Trigger queued computation to move on
-            for row in left_eval_frame:
+            for row in left_eval_frame._partitions:
                 for part in row:
                     part.drain_call_queue()
-            for row in right_eval_frame:
+            for row in right_eval_frame._partitions:
                 for part in row:
                     part.drain_call_queue()
 
