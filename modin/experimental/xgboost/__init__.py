@@ -62,11 +62,16 @@ class ModinXGBoostActor:
 
     def set_X_y(self, *X, y):
         X = pandas.concat(list(X), axis=1)
-        self._dtrain = xgb.DMatrix(X, y)
+        try:
+            self._dtrain = xgb.DMatrix(X, y)
+        except:
+            print("Error")
 
     def add_eval_X_y(self, *X, y, eval_method):
         if len(X) > 1:
             X = pandas.concat(list(X), axis=1)
+        else:
+            X = X[0]
         self._evals.append((xgb.DMatrix(X, y), eval_method))
 
     def train(self, rabit_args, params, *args, **kwargs):
@@ -123,6 +128,14 @@ def train(
                 left_eval_frame._partitions.shape[0]
                 == right_eval_frame._partitions.shape[0]
             ), "Unaligned test data"
+            # Trigger queued computation to move on
+            for row in left_eval_frame:
+                for part in row:
+                    part.drain_call_queue()
+            for row in right_eval_frame:
+                for part in row:
+                    part.drain_call_queue()
+
     if num_actors is None:
         num_actors = left_frame._partitions.shape[0]
 
@@ -134,6 +147,14 @@ def train(
         ]
     else:
         actors = [ModinXGBoostActor.remote() for _ in range(num_actors)]
+
+    # Trigger queued computation to move on
+    for row in left_frame._partitions:
+        for part in row:
+            part.drain_call_queue()
+    for row in right_frame._partitions:
+        for part in row:
+            part.drain_call_queue()
 
     # Split data across workers
     for i, actor in enumerate(actors):
