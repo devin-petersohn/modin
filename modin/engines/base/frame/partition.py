@@ -102,6 +102,14 @@ class BaseFramePartition(object):  # pragma: no cover
         """
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
+    def unwrap(self):
+        """Unwraps whatever object is in the object store layer.
+
+        Returns:
+             The object out of the object layer.
+        """
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
+
     @classmethod
     def put(cls, obj):
         """A factory classmethod to format a given object.
