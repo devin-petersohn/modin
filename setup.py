@@ -3,6 +3,8 @@ import versioneer
 import os
 from setuptools.dist import Distribution
 
+# Nothing
+
 try:
     from wheel.bdist_wheel import bdist_wheel
 
