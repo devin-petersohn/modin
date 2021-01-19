@@ -662,6 +662,20 @@ class BasePandasFrame(object):
             row_numeric_idx=new_row_order, col_numeric_idx=new_col_order
         )
 
+    def from_labels(self, level=None):
+        new_row_labels = pandas.RangeIndex(len(self.index))
+        new_parts = self._frame_mgr_cls.apply_func_to_select_indices(
+            0,
+            self._partitions,
+            lambda x, **kwargs: x.reset_index(level=level),
+            [0],
+            keep_remaining=True,
+        )
+        new_columns = self._frame_mgr_cls.get_indices(1, new_parts, lambda x: x.columns)
+        return self.__constructor__(
+            new_parts, new_row_labels, new_columns, row_lengths=self._row_lengths_cache
+        )
+
     def reorder_labels(self, row_numeric_idx=None, col_numeric_idx=None):
         """Reorder the column and or rows in this DataFrame.
 
