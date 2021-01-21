@@ -36,6 +36,7 @@ from modin.pandas.test.utils import (
     create_test_dfs,
     eval_general,
     generate_multiindex,
+    extra_test_parameters,
 )
 from modin.config import NPartitions
 
@@ -888,21 +889,71 @@ def test_reset_index(data):
     df_equals(modin_df_cp, pd_df_cp)
 
 
-@pytest.mark.parametrize("data", test_data_values, ids=test_data_keys)
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(
+            test_data["int_data"],
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+        test_data["float_nan_data"],
+    ],
+    ids=["int_data", "float_nan_data"],
+)
 @pytest.mark.parametrize("nlevels", [3])
 @pytest.mark.parametrize("columns_multiindex", [True, False])
 @pytest.mark.parametrize(
     "level",
-    ["no_level", None, 0, 1, 2, [2, 0], [2, 1], [1, 0], [2, 1, 2], [0, 0, 0, 0]],
+    [
+        "no_level",
+        None,
+        0,
+        1,
+        2,
+        [2, 0],
+        [2, 1],
+        [1, 0],
+        pytest.param(
+            [2, 1, 2],
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+        pytest.param(
+            [0, 0, 0, 0],
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+    ],
 )
 @pytest.mark.parametrize("col_level", ["no_col_level", 0, 1, 2])
-@pytest.mark.parametrize(
-    "col_fill", ["no_col_fill", None, 0, "col_one", 222.222, "new"]
-)
+@pytest.mark.parametrize("col_fill", ["no_col_fill", None, 0, "new"])
 @pytest.mark.parametrize("drop", [False])
-@pytest.mark.parametrize("multiindex_levels_names_max_levels", [0, 1, 2, 3, 4])
 @pytest.mark.parametrize(
-    "none_in_index_names", [False, True, "mixed_1st_None", "mixed_2nd_None"]
+    "multiindex_levels_names_max_levels",
+    [
+        0,
+        1,
+        2,
+        pytest.param(
+            3, marks=pytest.mark.skipif(not extra_test_parameters, reason="extra")
+        ),
+        pytest.param(
+            4, marks=pytest.mark.skipif(not extra_test_parameters, reason="extra")
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "none_in_index_names",
+    [
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+        True,
+        "mixed_1st_None",
+        pytest.param(
+            "mixed_2nd_None",
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+    ],
 )
 def test_reset_index_with_multi_index_no_drop(
     data,
@@ -966,15 +1017,67 @@ def test_reset_index_with_multi_index_no_drop(
     eval_general(modin_df, pandas_df, lambda df: df.reset_index(**kwargs))
 
 
-@pytest.mark.parametrize("data", test_data_values, ids=test_data_keys)
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(
+            test_data["int_data"],
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+        test_data["float_nan_data"],
+    ],
+    ids=["int_data", "float_nan_data"],
+)
 @pytest.mark.parametrize("nlevels", [3])
 @pytest.mark.parametrize(
     "level",
-    ["no_level", None, 0, 1, 2, [2, 0], [2, 1], [1, 0], [2, 1, 2], [0, 0, 0, 0]],
+    [
+        "no_level",
+        None,
+        0,
+        1,
+        2,
+        [2, 0],
+        [2, 1],
+        [1, 0],
+        pytest.param(
+            [2, 1, 2],
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+        pytest.param(
+            [0, 0, 0, 0],
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+    ],
 )
-@pytest.mark.parametrize("multiindex_levels_names_max_levels", [0, 1, 2, 3, 4])
 @pytest.mark.parametrize(
-    "none_in_index_names", [False, True, "mixed-False", "mixed-True"]
+    "multiindex_levels_names_max_levels",
+    [
+        0,
+        1,
+        2,
+        pytest.param(
+            3, marks=pytest.mark.skipif(not extra_test_parameters, reason="extra")
+        ),
+        pytest.param(
+            4, marks=pytest.mark.skipif(not extra_test_parameters, reason="extra")
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "none_in_index_names",
+    [
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+        True,
+        "mixed_1st_None",
+        pytest.param(
+            "mixed_2nd_None",
+            marks=pytest.mark.skipif(not extra_test_parameters, reason="extra"),
+        ),
+    ],
 )
 def test_reset_index_with_multi_index_drop(
     data, nlevels, level, multiindex_levels_names_max_levels, none_in_index_names
