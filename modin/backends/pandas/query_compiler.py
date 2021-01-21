@@ -562,11 +562,11 @@ class PandasQueryCompiler(BaseQueryCompiler):
         drop = kwargs.get("drop", False)
         level = kwargs.get("level", None)
         if not drop:
-            new_modin_frame = self._modin_frame.from_labels(level=level)
+            new_modin_frame = self._modin_frame.from_labels()
             new_self = self.__constructor__(new_modin_frame)
         else:
             new_self = self.copy()
-        new_self.index = pandas.RangeIndex(len(new_self.index))
+            new_self.index = pandas.RangeIndex(len(new_self.index))
         return new_self
 
     # END Reindex/reset_index

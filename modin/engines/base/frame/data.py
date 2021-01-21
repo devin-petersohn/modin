@@ -662,18 +662,35 @@ class BasePandasFrame(object):
             row_numeric_idx=new_row_order, col_numeric_idx=new_col_order
         )
 
-    def from_labels(self, level=None):
+    def from_labels(self):
         new_row_labels = pandas.RangeIndex(len(self.index))
         new_parts = self._frame_mgr_cls.apply_func_to_select_indices(
             0,
             self._partitions,
-            lambda x, **kwargs: x.reset_index(level=level),
-            [0],
-            keep_remaining=True,
+            lambda x, **kwargs: x.reset_index(),
+            {0:0},
+            keep_remaining=False,
         )
-        new_columns = self._frame_mgr_cls.get_indices(1, new_parts, lambda x: x.columns)
+        remaining_parts = self._frame_mgr_cls.apply_func_to_select_indices(
+            0,
+            self._partitions,
+            lambda x, **kwargs: x.reset_index(drop=True),
+            dict(zip(range(1, self._partitions.shape[-1]), [0] * (self._partitions.shape[-1] - 1))),
+            keep_remaining=False,
+        )
+        full_parts = self._frame_mgr_cls.concat(1, new_parts, remaining_parts)
+        new_columns = pandas.Index(
+            [self.index.names[i]
+             if self.index.names[i] is not None
+             else "level_{}".format(i)
+             for i in range(len(self.index.names))
+             ]).append(self.columns)
         return self.__constructor__(
-            new_parts, new_row_labels, new_columns, row_lengths=self._row_lengths_cache
+            full_parts,
+            new_row_labels,
+            new_columns,
+            row_lengths=self._row_lengths_cache,
+            column_widths=[len(self.index.names) + self._column_widths[0]] + self._column_widths[1:]
         )
 
     def reorder_labels(self, row_numeric_idx=None, col_numeric_idx=None):
