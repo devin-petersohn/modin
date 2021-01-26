@@ -663,22 +663,21 @@ class BasePandasFrame(object):
         )
 
     def from_labels(self):
+        """Convert the row labels to a column of data, inserted at the first position.
+
+        Returns
+        -------
+        BasePandasFrame
+            A new BasePandasFrame
+        """
         new_row_labels = pandas.RangeIndex(len(self.index))
         new_parts = self._frame_mgr_cls.apply_func_to_select_indices(
             0,
             self._partitions,
             lambda x, **kwargs: x.reset_index(),
-            {0:0},
-            keep_remaining=False,
+            [0],
+            keep_remaining=True,
         )
-        remaining_parts = self._frame_mgr_cls.apply_func_to_select_indices(
-            0,
-            self._partitions,
-            lambda x, **kwargs: x.reset_index(drop=True),
-            dict(zip(range(1, self._partitions.shape[-1]), [0] * (self._partitions.shape[-1] - 1))),
-            keep_remaining=False,
-        )
-        full_parts = self._frame_mgr_cls.concat(1, new_parts, remaining_parts)
         new_columns = pandas.Index(
             [self.index.names[i]
              if self.index.names[i] is not None
@@ -686,11 +685,12 @@ class BasePandasFrame(object):
              for i in range(len(self.index.names))
              ]).append(self.columns)
         return self.__constructor__(
-            full_parts,
+            new_parts,
             new_row_labels,
             new_columns,
             row_lengths=self._row_lengths_cache,
-            column_widths=[len(self.index.names) + self._column_widths[0]] + self._column_widths[1:]
+            column_widths=[len(self.index.names) + self._column_widths[0]] + self._column_widths[1:],
+            validate_axes="force",
         )
 
     def reorder_labels(self, row_numeric_idx=None, col_numeric_idx=None):
