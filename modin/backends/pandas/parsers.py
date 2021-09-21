@@ -591,7 +591,7 @@ class PandasParquetParser(PandasParser):
 
         if num_splits is None:
             return pandas.read_parquet(fname, **kwargs)
-        kwargs["use_pandas_metadata"] = True
+
         df = pandas.read_parquet(fname, **kwargs)
         if isinstance(df.index, pandas.RangeIndex):
             idx = len(df.index)

@@ -368,6 +368,19 @@ class PandasOnRayFramePartition(PandasFramePartition):
         """
         return cls.put(pandas.DataFrame())
 
+    def split(self, func, num_splits):
+        return [
+            PandasOnRayFramePartition(obj)
+            for obj in split_partition.options(
+                num_returns=num_splits
+            ).remote(self.oid, func)
+        ]
+
+
+@ray.remote
+def split_partition(df, func):
+    return func(df)
+
 
 @ray.remote(num_returns=2)
 def get_index_and_columns(df):

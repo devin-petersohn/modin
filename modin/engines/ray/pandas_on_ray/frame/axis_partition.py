@@ -182,6 +182,20 @@ class PandasOnRayFrameRowPartition(PandasOnRayFrameAxisPartition):
 
     axis = 1
 
+    def split(self, func, num_splits):
+        return [
+            PandasOnRayFramePartition(obj)
+            for obj in split_partition.options(
+                num_returns=num_splits
+            ).remote(func, *self.list_of_blocks)
+        ]
+
+
+@ray.remote
+def split_partition(func, *partitions):
+    dataframe = pandas.concat(list(partitions), axis=0, copy=False)
+    return func(dataframe)
+
 
 @ray.remote
 def deploy_ray_func(func, *args):  # pragma: no cover

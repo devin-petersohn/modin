@@ -1356,6 +1356,140 @@ class PandasFrame(object):
             self.dtypes if axis == 0 else None,
         )
 
+    def sort_by_shuffle(self, columns):
+        if not isinstance(columns, list):
+            columns = [columns]
+        n_partitions = len(self._row_lengths)
+        sort_columns_df = self.mask(col_indices=columns)
+        print(sort_columns_df.columns)
+
+        if False:  # self.dtypes[columns[0]]:
+            quants = sort_columns_df.mask(
+                row_numeric_idx=np.sort(np.random.choice(
+                    len(self.index),
+                    size=n_partitions * 2,
+                    replace=False
+                ))
+            ).to_pandas().quantile([i / (n_partitions + 1) for i in range(n_partitions)]).squeeze()
+
+            def split_func(df):
+                df = df.sort_values(columns)
+                t = np.digitize(df[columns].squeeze(), quants.values[1:])
+                grouper = df.groupby(t)
+                return [grouper.get_group(i) if i in grouper.keys else pandas.DataFrame(columns=df.columns) for i in range(len(quants))]
+        else:
+            multiplier = 3
+            splits = sort_columns_df.mask(
+                row_numeric_idx=np.sort(np.random.choice(
+                    len(self.index),
+                    size=n_partitions * multiplier,
+                    replace=False
+                ))
+            ).to_pandas().sort_values(columns).squeeze().iloc[
+                [i for i in range(n_partitions * multiplier) if i % multiplier == 0]
+            ]
+
+            def split_func(df):
+                df = df.sort_values(columns)
+                t = [n_partitions - 1] * len(df)
+                i = 0
+
+                for idx, value in enumerate(splits.iloc[1:].iterrows()):
+                    if hasattr(value, "__len__"):
+                        while df.iloc[i].loc[columns].lt(value).all(axis=None):
+                            t[i] = idx
+                            i += 1
+                    else:
+                        squeezed = df[columns].squeeze()
+                        value = value.squeeze()
+                        while squeezed.iloc[i] < value and i < len(squeezed):
+                            t[i] = idx
+                            i += 1
+                grouper = df.groupby(t)
+                return [grouper.get_group(i) if i in grouper.keys else pandas.DataFrame(columns=df.columns) for i in range(len(splits))]
+
+        all_parts = self._partition_mgr_cls.distributed_shuffle_apply(
+            self._partitions, split_func, lambda x: x.sort_values(columns), n_partitions
+        )
+        new_index = self._compute_axis_labels(0, all_parts)
+        result = self.__constructor__(
+            all_parts,
+            new_index,
+            self.columns,
+            None,
+            [len(self.columns)],
+            self.dtypes,
+        )
+        if new_index is not None:
+            result.synchronize_labels(0)
+        return result
+
+    def sort_by(self, columns):
+        if not isinstance(columns, list):
+            columns = [columns]
+        sort_columns_df = self.mask(col_indices=columns)
+        n_partitions = len(self._row_lengths)
+        quants = sort_columns_df.mask(
+            row_numeric_idx=np.sort(np.random.choice(
+                len(self.index),
+                size=n_partitions * 2,
+                replace=False
+            ))
+        ).to_pandas().quantile([i / (n_partitions + 1) for i in range(n_partitions)]).squeeze()
+
+        l = []
+
+        filters = sort_columns_df.map(
+            lambda x: x.loc[x.applymap(lambda b: b < quants.iloc[0]).values],
+            dtypes="copy"
+        )
+        result = self._partition_mgr_cls.map_axis_partitions(
+            0,
+            filters._partitions,
+            lambda x: x.sort_values(x.columns[0]),
+            lengths=[len(self.index)]
+        )
+        l.append(result)
+
+        for i in range(1, n_partitions):
+            filters = sort_columns_df.map(
+                lambda x: x.loc[x.applymap(lambda b: quants.iloc[i] > b >= quants.iloc[i - 1]).values],
+                dtypes="copy"
+            )
+            result = self._partition_mgr_cls.map_axis_partitions(
+                0,
+                filters._partitions,
+                lambda x: x.sort_values(x.columns[0]),
+                lengths=[len(self.index)]
+            )
+            l.append(result)
+
+        filters = sort_columns_df.map(
+            lambda x: x.loc[x.applymap(lambda b: b >= quants.iloc[-1]).values],
+            dtypes="copy"
+        )
+        result = self._partition_mgr_cls.map_axis_partitions(
+            0,
+            filters._partitions,
+            lambda x: x.sort_values(x.columns[0]),
+            lengths=[len(self.index)]
+        )
+        l.append(result)
+
+        all_parts = self._partition_mgr_cls.concat(0, l[0], l[1:])
+        new_index = self._compute_axis_labels(0, all_parts)
+        result = self.__constructor__(
+            all_parts,
+            new_index,
+            sort_columns_df.columns,
+            None,
+            None,
+            sort_columns_df.dtypes,
+        )
+        if new_index is not None:
+            result.synchronize_labels(0)
+        return result
+
     def apply_full_axis(
         self,
         axis,

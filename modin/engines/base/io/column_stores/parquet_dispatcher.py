@@ -133,4 +133,4 @@ class ParquetDispatcher(ColumnStoreDispatcher):
                     )
                     column_names = [c for c in column_names if c not in index_columns]
             columns = [name for name in column_names if not PQ_INDEX_REGEX.match(name)]
-        return cls.build_query_compiler(path, columns, **kwargs)
+        return cls.build_query_compiler(path, columns, engine=engine, **kwargs)

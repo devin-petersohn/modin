@@ -201,6 +201,18 @@ class PandasOnDaskFrameRowPartition(PandasOnDaskFrameAxisPartition):
 
     axis = 1
 
+    def split(self, func, num_splits):
+        client = default_client()
+        axis_result = client.submit(split_partition(func), *self.list_of_blocks, pure=False)
+        return [client.submit(lambda l: l[i], axis_result, pure=False) for i in range(num_splits)]
+
+
+def split_partition(func):
+
+    def wrap_me(*partitions):
+        dataframe = pandas.concat(list(partitions), axis=0, copy=True)
+        return func(dataframe)
+    return wrap_me
 
 def deploy_dask_func(func, *args):
     """
