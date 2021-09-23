@@ -1361,7 +1361,6 @@ class PandasFrame(object):
             columns = [columns]
         n_partitions = len(self._row_lengths)
         sort_columns_df = self.mask(col_indices=columns)
-        print(sort_columns_df.columns)
 
         if False:  # self.dtypes[columns[0]]:
             quants = sort_columns_df.mask(
@@ -1378,7 +1377,7 @@ class PandasFrame(object):
                 grouper = df.groupby(t)
                 return [grouper.get_group(i) if i in grouper.keys else pandas.DataFrame(columns=df.columns) for i in range(len(quants))]
         else:
-            multiplier = 3
+            multiplier = 10
             splits = sort_columns_df.mask(
                 row_numeric_idx=np.sort(np.random.choice(
                     len(self.index),
@@ -1390,18 +1389,18 @@ class PandasFrame(object):
             ]
 
             def split_func(df):
-                df = df.sort_values(columns)
+                df_sorted = df[columns].sort_values(columns)
                 t = [n_partitions - 1] * len(df)
                 i = 0
 
-                for idx, value in enumerate(splits.iloc[1:].iterrows()):
-                    if hasattr(value, "__len__"):
-                        while df.iloc[i].loc[columns].lt(value).all(axis=None):
-                            t[i] = idx
-                            i += 1
+                for idx, value in enumerate(splits.iloc[1:]):
+                    if False:  # hasattr(value, "__len__"):
+                        raise NotImplementedError
+                        # while str(df_sorted.iloc[i].values) < str(value[-1].values) and i < len(t):
+                        #     t[i] = idx
+                        #     i += 1
                     else:
-                        squeezed = df[columns].squeeze()
-                        value = value.squeeze()
+                        squeezed = df_sorted.squeeze()
                         while squeezed.iloc[i] < value and i < len(squeezed):
                             t[i] = idx
                             i += 1
