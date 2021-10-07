@@ -265,7 +265,7 @@ class PandasOnDaskFramePartition(PandasFramePartition):
         callable
             An object that can be accepted by ``apply``.
         """
-        return default_client().scatter(func, hash=False, broadcast=True)
+        return func # default_client().scatter(func, hash=False, broadcast=True)
 
     @classmethod
     def _length_extraction_fn(cls):
@@ -350,6 +350,18 @@ class PandasOnDaskFramePartition(PandasFramePartition):
             A new ``PandasOnDaskFramePartition`` object.
         """
         return cls(pandas.DataFrame(), 0, 0)
+
+    def split(self, func, num_splits):
+        client = default_client()
+        results = client.submit(split_partition, self.future, func)
+        return [
+            PandasOnDaskFramePartition(client.submit(lambda l: l[i], results, pure=False))
+            for i in range(num_splits)
+        ]
+
+
+def split_partition(partition, func):
+    return func(partition)
 
 
 def apply_func(partition, func, *args, **kwargs):

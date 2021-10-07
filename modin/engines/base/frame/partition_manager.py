@@ -557,6 +557,7 @@ class PandasFramePartitionManager(ABC):
     def distributed_shuffle_apply(cls, partitions, split_func, post_shuffle_func, num_splits):
         parts = cls.row_partitions(partitions)
         split_parts = np.array([part.split(split_func, num_splits) for part in parts])
+        return split_parts
         final_parts = [
             cls._column_partitions_class(split_parts[:, i]).apply(post_shuffle_func, num_splits=1) for i in
             range(num_splits)

@@ -204,7 +204,7 @@ class PandasOnDaskFrameRowPartition(PandasOnDaskFrameAxisPartition):
     def split(self, func, num_splits):
         client = default_client()
         axis_result = client.submit(split_partition(func), *self.list_of_blocks, pure=False)
-        return [client.submit(lambda l: l[i], axis_result, pure=False) for i in range(num_splits)]
+        return [PandasOnDaskFramePartition(client.submit(lambda l: l[i], axis_result, pure=False)) for i in range(num_splits)]
 
 
 def split_partition(func):

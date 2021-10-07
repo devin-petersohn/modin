@@ -1401,11 +1401,19 @@ class PandasFrame(object):
                         #     i += 1
                     else:
                         squeezed = df_sorted.squeeze()
+                        num_identical = splits.eq(value).sum()
                         while squeezed.iloc[i] < value and i < len(squeezed):
-                            t[i] = idx
+                            if num_identical > 1:
+                                t[i] = np.random.choice(range(num_identical), 1)[0] + idx
+                            else:
+                                t[i] = idx
                             i += 1
+                assert len(t) == len(df)
+                # df["_g_"] = t
                 grouper = df.groupby(t)
-                return [grouper.get_group(i) if i in grouper.keys else pandas.DataFrame(columns=df.columns) for i in range(len(splits))]
+                return [grouper.get_group(i)
+                        if i in grouper.keys else pandas.DataFrame(columns=df.columns)
+                        for i in range(len(splits))]
 
         all_parts = self._partition_mgr_cls.distributed_shuffle_apply(
             self._partitions, split_func, lambda x: x.sort_values(columns), n_partitions
