@@ -109,6 +109,7 @@ class OpenFile:
         """
         self.file.close()
 
+from modin.logging.logger_function import logger_decorator
 
 class FileDispatcher:
     """
@@ -126,6 +127,7 @@ class FileDispatcher:
     query_compiler_cls = None
 
     @classmethod
+    @logger_decorator("PANDAS-API", "FileDispatcher.read", "INFO")
     def read(cls, *args, **kwargs):
         """
         Read data according passed `args` and `kwargs`.
@@ -188,6 +190,7 @@ class FileDispatcher:
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
     @classmethod
+    @logger_decorator("PANDAS-API", "FileDispatcher.get_path", "INFO")
     def get_path(cls, file_path):
         """
         Process `file_path` in accordance to it's type.
@@ -214,6 +217,7 @@ class FileDispatcher:
             return os.path.abspath(file_path)
 
     @classmethod
+    @logger_decorator("PANDAS-API", "FileDispatcher.file_size", "INFO")
     def file_size(cls, f):
         """
         Get the size of file associated with file handle `f`.
@@ -235,6 +239,7 @@ class FileDispatcher:
         return size
 
     @classmethod
+    @logger_decorator("PANDAS-API", "FileDispatcher.file_exists", "INFO")
     def file_exists(cls, file_path):
         """
         Check if `file_path` exists.
