@@ -2597,6 +2597,30 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
         )
 
     @doc_utils.doc_groupby_method(
+        action="compute cumulative count",
+        result="count of all the previous values",
+        refer_to="cumcount",
+    )
+    def groupby_cumcount(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="cumcount",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
         action="compute cumulative sum",
         result="sum of all the previous values",
         refer_to="cumsum",
@@ -2707,6 +2731,28 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
         return self.groupby_agg(
             by=by,
             agg_func="std",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="compute standard error", result="standard error", refer_to="sem"
+    )
+    def groupby_sem(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="sem",
             axis=axis,
             groupby_kwargs=groupby_kwargs,
             agg_args=agg_args,
@@ -2891,6 +2937,150 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
         return self.groupby_agg(
             by=by,
             agg_func="shift",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="get first value in group",
+        result="first value",
+        refer_to="first",
+    )
+    def groupby_first(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="first",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="get last value in group",
+        result="last value",
+        refer_to="last",
+    )
+    def groupby_last(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="last",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="get first n values of a group",
+        result="first n values of a group",
+        refer_to="head",
+    )
+    def groupby_head(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="head",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="get last n values in group",
+        result="last n values",
+        refer_to="tail",
+    )
+    def groupby_tail(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="tail",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="get nth value in group",
+        result="nth value",
+        refer_to="nth",
+    )
+    def groupby_nth(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="nth",
+            axis=axis,
+            groupby_kwargs=groupby_kwargs,
+            agg_args=agg_args,
+            agg_kwargs=agg_kwargs,
+            drop=drop,
+        )
+
+    @doc_utils.doc_groupby_method(
+        action="get group number of each value",
+        result="group number of each value",
+        refer_to="ngroup",
+    )
+    def groupby_ngroup(
+        self,
+        by,
+        axis,
+        groupby_kwargs,
+        agg_args,
+        agg_kwargs,
+        drop=False,
+    ):
+        return self.groupby_agg(
+            by=by,
+            agg_func="ngroup",
             axis=axis,
             groupby_kwargs=groupby_kwargs,
             agg_args=agg_args,
@@ -4060,11 +4250,28 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
 
     # End of Resample methods
 
+    @doc_utils.doc_str_method(refer_to="capitalize", params="")
+    def str_capitalize(self):
+        return StrDefault.register(pandas.Series.str.capitalize)(self)
+
     # Str methods
 
     @doc_utils.doc_str_method(refer_to="capitalize", params="")
     def str_capitalize(self):
         return StrDefault.register(pandas.Series.str.capitalize)(self)
+
+    @doc_utils.doc_str_method(
+        refer_to="cat",
+        params="""
+        others : Series, Index, DataFrame, np.ndarray or list-like
+        sep : str
+        na_sep : str
+        join : {'left', 'right', 'outer', 'inner'}, default: 'left'""",
+    )
+    def str_cat(self, others=None, sep=None, na_rep=None, join="left"):
+        return StrDefault.register(pandas.Series.str.cat)(
+            self, others, sep, na_rep, join
+        )
 
     @doc_utils.doc_str_method(
         refer_to="center",
@@ -4128,6 +4335,19 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
     def str_findall(self, pat, flags=0, **kwargs):
         return StrDefault.register(pandas.Series.str.findall)(
             self, pat, flags, **kwargs
+        )
+
+    @doc_utils.doc_str_method(
+        refer_to="fullmatch",
+        params="""
+        pat : str
+        case : bool, default: True
+        flags : int, default: 0
+        na : object, default: None""",
+    )
+    def str_fullmatch(self, pat, case=True, flags=0, na=None):
+        return StrDefault.register(pandas.Series.str.fullmatch)(
+            self, pat, case, flags, na
         )
 
     @doc_utils.doc_str_method(refer_to="get", params="i : int")
@@ -4240,6 +4460,14 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
     )
     def str_partition(self, sep=" ", expand=True):
         return StrDefault.register(pandas.Series.str.partition)(self, sep, expand)
+
+    @doc_utils.doc_str_method(refer_to="removeprefix", params="prefix : str")
+    def str_removeprefix(self, prefix):
+        return StrDefault.register(pandas.Series.str.removeprefix)(self, prefix)
+
+    @doc_utils.doc_str_method(refer_to="removesuffix", params="suffix : str")
+    def str_removesuffix(self, suffix):
+        return StrDefault.register(pandas.Series.str.removesuffix)(self, suffix)
 
     @doc_utils.doc_str_method(refer_to="repeat", params="repeats : int")
     def str_repeat(self, repeats):
@@ -4585,6 +4813,18 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
         )
 
     @doc_utils.doc_window_method(
+        result="sem",
+        refer_to="sem",
+        params="""
+        *args : iterable
+        **kwargs : dict""",
+    )
+    def rolling_sem(self, fold_axis, rolling_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.rolling.Rolling.sem)(
+            self, rolling_args, *args, **kwargs
+        )
+
+    @doc_utils.doc_window_method(
         result="variance",
         refer_to="var",
         params="""
@@ -4598,6 +4838,50 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
         )
 
     # End of Rolling methods
+
+    # Begin Expanding methods
+
+    def expanding_sum(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.sum)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_min(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.min)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_max(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.max)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_mean(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.mean)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_var(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.var)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_std(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.std)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_count(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.count)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    def expanding_sem(self, fold_axis, expanding_args, *args, **kwargs):
+        return RollingDefault.register(pandas.core.window.expanding.Expanding.sem)(
+            self, expanding_args, *args, **kwargs
+        )
+
+    # End of Expanding methods
 
     # Window methods
 

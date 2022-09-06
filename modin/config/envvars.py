@@ -75,7 +75,7 @@ class Engine(EnvironmentVariable, type=str):
     """Distribution engine to run queries by."""
 
     varname = "MODIN_ENGINE"
-    choices = ("Ray", "Dask", "Python", "Native")
+    choices = ("Ray", "Dask", "Python", "Native", "Client")
 
     @classmethod
     def _get_default(cls) -> str:
@@ -131,9 +131,10 @@ class Engine(EnvironmentVariable, type=str):
             pass
         else:
             return "Native"
-        raise ImportError(
-            "Please refer to installation documentation page to install an engine"
-        )
+
+        # If we can't import any other engines we should go ahead and default to Python being
+        # the default backend engine.
+        return "Python"
 
 
 class StorageFormat(EnvironmentVariable, type=str):
@@ -141,7 +142,7 @@ class StorageFormat(EnvironmentVariable, type=str):
 
     varname = "MODIN_STORAGE_FORMAT"
     default = "Pandas"
-    choices = ("Pandas", "Hdk", "Pyarrow", "Cudf")
+    choices = ("Pandas", "Hdk", "Pyarrow", "Cudf", "")
 
 
 class IsExperimental(EnvironmentVariable, type=bool):
