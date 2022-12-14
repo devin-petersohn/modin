@@ -19,7 +19,7 @@ from pandas.api.types import is_list_like
 from pandas.core.computation.parsing import tokenize_string
 
 from typing import Any
-
+import warnings
 
 class ClientQueryCompiler(BaseQueryCompiler):
     @classmethod
@@ -90,6 +90,11 @@ class ClientQueryCompiler(BaseQueryCompiler):
         )
 
     def to_pandas(self):
+        warnings.warn(
+            f"Number of rows downloaded will be limited. To avoid this limit adjust the client_row_transfer_limit parameter when initializing Ponder.",
+            UserWarning,
+            stacklevel=3,
+        )
         value = self._service.to_pandas(self._id)
         if isinstance(value, Exception):
             raise value
