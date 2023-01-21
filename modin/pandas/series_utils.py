@@ -292,7 +292,7 @@ class StringMethods(ClassLogger):
             query_compiler=self._query_compiler.str_findall(pat, flags=flags, **kwargs)
         )
 
-    def fullmatch(self, pat, case=True, flags=0, na=np.NaN):
+    def fullmatch(self, pat, case=True, flags=0, na=None):
         if not isinstance(pat, (str, _pattern_type)):
             raise TypeError("first argument must be string or compiled pattern")
         return Series(
