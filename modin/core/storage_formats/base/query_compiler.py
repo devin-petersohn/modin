@@ -4153,7 +4153,7 @@ class BaseQueryCompiler(ClassLogger, abc.ABC):
         flags : int, default: 0
         na : object, default: None""",
     )
-    def str_fullmatch(self, pat, case=True, flags=0, na=np.NaN):
+    def str_fullmatch(self, pat, case=True, flags=0, na=None):
         return StrDefault.register(pandas.Series.str.fullmatch)(self, pat, case, flags, na)
 
     @doc_utils.doc_str_method(refer_to="get", params="i : int")
