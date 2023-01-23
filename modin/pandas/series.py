@@ -1242,6 +1242,10 @@ class Series(SeriesCompat, BasePandasDataset):
         """
         Return the largest `n` elements.
         """
+        if len(self._query_compiler.columns) == 0:
+            raise NotImplementedError(
+                "Series.nlargest is not implemented for empty Series."
+            )
         return Series(
             query_compiler=self._query_compiler.nlargest(
                 n=n, columns=self.name, keep=keep
@@ -1252,6 +1256,10 @@ class Series(SeriesCompat, BasePandasDataset):
         """
         Return the smallest `n` elements.
         """
+        if len(self._query_compiler.columns) == 0:
+            raise NotImplementedError(
+                "Series.nsmallest is not implemented for empty Series."
+            )
         return Series(
             query_compiler=self._query_compiler.nsmallest(
                 n=n, columns=self.name, keep=keep
