@@ -21,6 +21,21 @@ from pandas.core.computation.parsing import tokenize_string
 from typing import Any
 
 
+class ClientIndexMetadataCache(object):
+    def __init__(self, index_handle):
+        self._index_handle = index_handle
+
+    _len = None
+
+    def __len__(self):
+        if self._len is None:
+            self._len = len(self._index_handle)
+        return self._len
+
+    def __getattr__(self, item):
+        return getattr(self._index_handle, item)
+
+
 class ClientQueryCompiler(BaseQueryCompiler):
     @classmethod
     def set_server_connection(cls, conn):
@@ -47,11 +62,14 @@ class ClientQueryCompiler(BaseQueryCompiler):
         self._id = self._service.rename(self._id, new_row_labels=new_index)
 
     def _get_index(self):
-        return self._service.index(self._id)
+        if self._index_cache is None:
+            self._index_cache = ClientIndexMetadataCache(self._service.index(self._id))
+        return self._index_cache
 
     columns = property(_get_columns, _set_columns)
     _columns_cache = None
     index = property(_get_index, _set_index)
+    _index_cache = None
     _dtypes_cache = None
 
     @property
