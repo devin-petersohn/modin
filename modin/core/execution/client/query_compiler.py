@@ -939,6 +939,7 @@ _GROUPBY_FORWARDING_METHODS = frozenset(
         "std",
         "sem",
         "rank",
+        "unique",
         "nunique",
         "median",
         "quantile",
@@ -949,6 +950,8 @@ _GROUPBY_FORWARDING_METHODS = frozenset(
         "var",
         "first",
         "last",
+        "nlargest",
+        "nsmallest",
     }
 )
 
