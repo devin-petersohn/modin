@@ -762,7 +762,17 @@ class DataFrameGroupBy(DataFrameGroupByCompat):
         )
 
     def ngroup(self, ascending=True):
-        return self._default_to_pandas(lambda df: df.ngroup(ascending))
+        result = self._wrap_aggregation(
+            type(self._query_compiler).groupby_ngroup,
+            numeric_only=False,
+            agg_kwargs=dict(ascending=ascending),
+        )
+        if not isinstance(result, Series):
+            # The result should always be a Series with name None and type int64
+            result = result.squeeze(axis=1)
+        # TODO: this might not hold in the future
+        result.name = None
+        return result
 
     def nunique(self, dropna=True):
         return self._check_index(
@@ -789,7 +799,7 @@ class DataFrameGroupBy(DataFrameGroupByCompat):
             self._wrap_aggregation(
                 type(self._query_compiler).groupby_head,
                 agg_kwargs=dict(n=n),
-                numeric_only=False
+                numeric_only=False,
             )
         )
 
@@ -875,7 +885,7 @@ class DataFrameGroupBy(DataFrameGroupByCompat):
             self._wrap_aggregation(
                 type(self._query_compiler).groupby_tail,
                 agg_kwargs=dict(n=n),
-                numeric_only=False
+                numeric_only=False,
             )
         )
 
