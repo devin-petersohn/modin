@@ -1320,7 +1320,7 @@ class SeriesGroupBy(SeriesGroupByCompat, DataFrameGroupBy):
             self._wrap_aggregation(
                 type(self._query_compiler).groupby_nlargest,
                 agg_kwargs=dict(n=n, keep=keep),
-                numeric_only=True,
+                numeric_only=False,
             )
         )
 
@@ -1329,7 +1329,7 @@ class SeriesGroupBy(SeriesGroupByCompat, DataFrameGroupBy):
             self._wrap_aggregation(
                 type(self._query_compiler).groupby_nsmallest,
                 agg_kwargs=dict(n=n, keep=keep),
-                numeric_only=True,
+                numeric_only=False,
             )
         )
 
