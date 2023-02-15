@@ -1097,6 +1097,25 @@ class Series(SeriesCompat, BasePandasDataset):
             )
         )
 
+    def info(
+        self,
+        verbose: "bool | None" = None,
+        buf: "IO[str] | None" = None,
+        max_cols: "int | None" = None,
+        memory_usage: "bool | str | None" = None,
+        show_counts: "bool" = True,
+    ):
+        from pandas.io.formats.info import SeriesInfo
+
+        # Can't do memory_usage yet
+        memory_usage = False
+        return SeriesInfo(self, memory_usage).render(
+            buf=buf,
+            max_cols=max_cols,
+            verbose=verbose,
+            show_counts=show_counts,
+        )
+
     def idxmax(self, axis=0, skipna=True, *args, **kwargs):  # noqa: PR01, RT01, D200
         """
         Return the row label of the maximum value.
