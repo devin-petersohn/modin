@@ -14,29 +14,13 @@
 import pandas
 import warnings
 
-from modin._compat import PandasCompatVersion
+__pandas_version__ = "1.5.3"
 
-if PandasCompatVersion.CURRENT == PandasCompatVersion.PY36:
-    __pandas_version__ = "1.1.5"
-
-    if pandas.__version__ != __pandas_version__:
-        warnings.warn(
-            f"The pandas version installed ({pandas.__version__}) does not match the pandas version"
-            + f" Modin supports ({__pandas_version__}) in Python 3.6 legacy compatibility mode."
-            + " This may cause undesired side effects!"
-        )
-    else:
-        warnings.warn(
-            f"Starting Modin in compatibility mode to support legacy pandas version {__pandas_version__}"
-        )
-elif PandasCompatVersion.CURRENT == PandasCompatVersion.LATEST:
-    __pandas_version__ = "1.4.4"
-
-    if pandas.__version__ != __pandas_version__:
-        warnings.warn(
-            f"The pandas version installed ({pandas.__version__}) does not match the pandas version"
-            + f" Modin supports ({__pandas_version__}). This may cause undesired side effects!"
-        )
+if pandas.__version__ != __pandas_version__:
+    warnings.warn(
+        f"The pandas version installed ({pandas.__version__}) does not match the supported pandas version in"
+        + f" Modin ({__pandas_version__}). This may cause undesired side effects!"
+    )
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -45,7 +29,6 @@ with warnings.catch_warnings():
         cut,
         factorize,
         test,
-        qcut,
         date_range,
         period_range,
         Index,
@@ -55,7 +38,6 @@ with warnings.catch_warnings():
         DatetimeIndex,
         Timedelta,
         Timestamp,
-        to_timedelta,
         set_eng_float_format,
         options,
         set_option,
@@ -97,13 +79,15 @@ with warnings.catch_warnings():
         NamedAgg,
         NA,
         api,
+        ArrowDtype,
+        Flags,
+        Float32Dtype,
+        Float64Dtype,
+        from_dummies,
     )
 import os
 
-from modin.config import Engine, Parameter
-
-# Set this so that Pandas doesn't try to multithread by itself
-os.environ["OMP_NUM_THREADS"] = "1"
+from modin.config import Parameter
 
 _is_first_update = {}
 _NOINIT_ENGINES = {
@@ -113,9 +97,12 @@ _NOINIT_ENGINES = {
 
 
 def _update_engine(publisher: Parameter):
-    from modin.config import StorageFormat, CpuCount, Engine
+    from modin.config import Engine, StorageFormat, CpuCount
     from modin.config.envvars import IsExperimental
     from modin.config.pubsub import ValueSource
+
+    # Set this so that Pandas doesn't try to multithread by itself
+    os.environ["OMP_NUM_THREADS"] = "1"
 
     sfmt = StorageFormat.get()
 
@@ -166,6 +153,11 @@ def _update_engine(publisher: Parameter):
             from modin.core.execution.dask.common import initialize_dask
 
             initialize_dask()
+    elif publisher.get() == "Unidist":
+        if _is_first_update.get("Unidist", True):
+            from modin.core.execution.unidist.common import initialize_unidist
+
+            initialize_unidist()
     elif publisher.get() == "Cloudray":
         from modin.experimental.cloud import get_connection
 
@@ -203,7 +195,7 @@ def _update_engine(publisher: Parameter):
         ), f"Storage format should be 'Hdk' with 'Cloudnative' engine, but provided {sfmt}."
         get_connection().modules["modin"].set_execution("Native", "Hdk")
 
-    elif publisher.get() not in _NOINIT_ENGINES:
+    elif publisher.get() not in Engine.NOINIT_ENGINES:
         raise ImportError("Unrecognized execution engine: {}.".format(publisher.get()))
 
     _is_first_update[publisher.get()] = False
@@ -249,6 +241,7 @@ from .general import (
     notna,
     pivot,
     to_numeric,
+    qcut,
     to_datetime,
     unique,
     value_counts,
@@ -257,10 +250,9 @@ from .general import (
     crosstab,
     lreshape,
     wide_to_long,
+    to_timedelta,
+    pivot_table,
 )
-
-from modin._compat.pandas_api.namespace import pivot_table
-from modin._compat import PandasCompatVersion
 
 from .plotting import Plotting as plotting
 from modin.utils import show_versions
@@ -371,12 +363,11 @@ __all__ = [  # noqa: F405
     "NamedAgg",
     "api",
     "read_xml",
+    "ArrowDtype",
+    "Flags",
+    "Float32Dtype",
+    "Float64Dtype",
+    "from_dummies",
 ]
 
-if PandasCompatVersion.CURRENT != PandasCompatVersion.PY36:
-    from modin._compat.pandas_api.namespace import Flags, Float32Dtype, Float64Dtype
-
-    __all__.extend(["Flags", "Float32Dtype", "Float64Dtype"])
-del PandasCompatVersion
-
-del pandas, Engine, Parameter
+del pandas, Parameter

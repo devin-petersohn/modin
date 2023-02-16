@@ -96,7 +96,7 @@ def test_unwrap_partitions(axis, reverse_index, reverse_columns):
         actual_axis_partitions = unwrap_partitions(df, axis=axis)
         assert len(expected_axis_partitions) == len(actual_axis_partitions)
         for item_idx in range(len(expected_axis_partitions)):
-            if Engine.get() in ["Ray", "Dask"]:
+            if Engine.get() in ["Ray", "Dask", "Unidist"]:
                 df_equals(
                     get_func(expected_axis_partitions[item_idx]),
                     get_func(actual_axis_partitions[item_idx]),
@@ -130,7 +130,7 @@ def test_from_partitions(axis, index, columns, row_lengths, column_widths):
         if axis == 0
         else [num_cols, num_cols]
     )
-
+    futures = []
     if Engine.get() == "Ray":
         if axis is None:
             futures = [[put_func(df1), put_func(df2)]]

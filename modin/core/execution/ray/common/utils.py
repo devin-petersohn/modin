@@ -42,6 +42,8 @@ _OBJECT_STORE_TO_SYSTEM_MEMORY_RATIO = 0.6
 # https://github.com/ray-project/ray/blob/4692e8d8023e789120d3f22b41ffb136b50f70ea/python/ray/_private/ray_constants.py#L57-L62
 _MAC_OBJECT_STORE_LIMIT_BYTES = 2 * 2**30
 
+_RAY_IGNORE_UNHANDLED_ERRORS_VAR = "RAY_IGNORE_UNHANDLED_ERRORS"
+
 ObjectIDType = ray.ObjectRef
 if version.parse(ray.__version__) >= version.parse("1.2.0"):
     from ray.util.client.common import ClientObjectRef
@@ -147,6 +149,14 @@ def initialize_ray(
     else:
         NPartitions._put(num_cpus)
 
+    # TODO(https://github.com/ray-project/ray/issues/28216): remove this
+    # workaround once Ray gives a better way to suppress task errors.
+    # Ideally we would not set global environment variables.
+    # If user has explicitly set _RAY_IGNORE_UNHANDLED_ERRORS_VAR, don't
+    # don't override its value.
+    if _RAY_IGNORE_UNHANDLED_ERRORS_VAR not in os.environ:
+        os.environ[_RAY_IGNORE_UNHANDLED_ERRORS_VAR] = "1"
+
 
 def _get_object_store_memory() -> Optional[int]:
     """
@@ -246,3 +256,26 @@ def deserialize(obj):
         return dict(zip(obj.keys(), RayWrapper.materialize(list(obj.values()))))
     else:
         return obj
+
+
+def wait(obj_ids):
+    """
+    Wrap ``ray.wait`` to handle duplicate object references.
+
+    ``ray.wait`` assumes a list of unique object references: see
+    https://github.com/modin-project/modin/issues/5045
+
+    Parameters
+    ----------
+    obj_ids : List[ObjectIDType]
+        The object IDs to wait on.
+
+    Returns
+    -------
+    Tuple[List[ObjectIDType], List[ObjectIDType]]
+        A list of object IDs that are ready, and a list of object IDs remaining (this
+        is the same as for ``ray.wait``). Unlike ``ray.wait``, the order of these IDs is not
+        guaranteed.
+    """
+    unique_ids = list(set(obj_ids))
+    return ray.wait(unique_ids, num_returns=len(unique_ids))

@@ -18,9 +18,11 @@ from copy import copy
 
 import pandas
 from pandas.api.types import is_scalar
+from pandas.util import cache_readonly
 
 from modin.pandas.indexing import compute_sliced_len
 from modin.core.storage_formats.pandas.utils import length_fn_pandas, width_fn_pandas
+from modin.logging import get_logger
 
 
 class PandasDataframePartition(ABC):  # pragma: no cover
@@ -33,6 +35,18 @@ class PandasDataframePartition(ABC):  # pragma: no cover
     _length_cache = None
     _width_cache = None
     _data = None
+
+    @cache_readonly
+    def __constructor__(self):
+        """
+        Create a new instance of this object.
+
+        Returns
+        -------
+        PandasDataframePartition
+            New instance of pandas partition.
+        """
+        return type(self)
 
     def get(self):
         """
@@ -119,7 +133,12 @@ class PandasDataframePartition(ABC):  # pragma: no cover
         This function will be executed when `apply` is called. It will be executed
         in the order inserted; apply's func operates the last and return.
         """
-        pass
+        return self.__constructor__(
+            self._data,
+            call_queue=self.call_queue + [[func, args, kwargs]],
+            length=length,
+            width=width,
+        )
 
     def drain_call_queue(self):
         """Execute all operations stored in the call queue on the object wrapped by this partition."""
@@ -288,31 +307,74 @@ class PandasDataframePartition(ABC):  # pragma: no cover
         """
         return width_fn_pandas
 
-    def length(self):
+    def length(self, materialize=True):
         """
         Get the length of the object wrapped by this partition.
 
+        Parameters
+        ----------
+        materialize : bool, default: True
+            Whether to forcibly materialize the result into an integer. If ``False``
+            was specified, may return a future of the result if it hasn't been
+            materialized yet.
+
         Returns
         -------
-        int
+        int or its Future
             The length of the object.
         """
         if self._length_cache is None:
             self._length_cache = self.apply(self._length_extraction_fn()).get()
         return self._length_cache
 
-    def width(self):
+    def width(self, materialize=True):
         """
         Get the width of the object wrapped by the partition.
 
+        Parameters
+        ----------
+        materialize : bool, default: True
+            Whether to forcibly materialize the result into an integer. If ``False``
+            was specified, may return a future of the result if it hasn't been
+            materialized yet.
+
         Returns
         -------
-        int
+        int or its Future
             The width of the object.
         """
         if self._width_cache is None:
             self._width_cache = self.apply(self._width_extraction_fn()).get()
         return self._width_cache
+
+    def split(self, split_func, num_splits, *args):
+        """
+        Split the object wrapped by the partition into multiple partitions.
+
+        Parameters
+        ----------
+        split_func : Callable[pandas.DataFrame, List[Any]] -> List[pandas.DataFrame]
+            The function that will split this partition into multiple partitions. The list contains
+            pivots to split by, and will have the same dtype as the major column we are shuffling on.
+        num_splits : int
+            The number of resulting partitions (may be empty).
+        *args : List[Any]
+            Arguments to pass to ``split_func``.
+
+        Returns
+        -------
+        list
+            A list of partitions.
+        """
+        logger = get_logger()
+        logger.debug(f"ENTER::Partition.split::{self._identity}")
+
+        logger.debug(f"SUBMIT::_split_df::{self._identity}")
+        outputs = self.execution_wrapper.deploy(
+            split_func, [self._data] + list(args), num_returns=num_splits
+        )
+        logger.debug(f"EXIT::Partition.split::{self._identity}")
+        return [self.__constructor__(output) for output in outputs]
 
     @classmethod
     def empty(cls):

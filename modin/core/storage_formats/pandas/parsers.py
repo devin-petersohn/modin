@@ -585,7 +585,11 @@ class PandasExcelParser(PandasParser):
             **kwargs,
         )
         pandas_df = parser.read()
-        if len(pandas_df) > 1 and pandas_df.isnull().all().all():
+        if (
+            len(pandas_df) > 1
+            and len(pandas_df.columns) != 0
+            and pandas_df.isnull().all().all()
+        ):
             # Drop NaN rows at the end of the DataFrame
             pandas_df = pandas.DataFrame(columns=pandas_df.columns)
 
@@ -705,7 +709,7 @@ engine : str
     )
     def parse(files_for_parser, engine, **kwargs):
         columns = kwargs.get("columns", None)
-        storage_options = kwargs.pop("storage_options", {}) or {}
+        storage_options = kwargs.get("storage_options", {})
         chunks = []
         # `single_worker_read` just passes in a string path
         if isinstance(files_for_parser, str):
@@ -786,7 +790,6 @@ read_sql_engine : str
     Underlying engine ('pandas' or 'connectorx') used for fetching query result.""",
     )
     def parse(sql, con, index_col, read_sql_engine, **kwargs):
-
         enable_cx = False
         if read_sql_engine == "Connectorx":
             try:

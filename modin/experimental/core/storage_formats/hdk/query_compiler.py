@@ -25,8 +25,9 @@ from modin.core.storage_formats.base.query_compiler import (
 from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
 from modin.utils import _inherit_docstrings, MODIN_UNNAMED_SERIES_LABEL
 from modin.error_message import ErrorMessage
-import pandas
 
+import pandas
+from pandas._libs.lib import no_default
 from pandas.core.common import is_bool_indexer
 from pandas.core.dtypes.common import is_list_like
 from functools import wraps
@@ -284,7 +285,7 @@ class DFAlgQueryCompiler(BaseQueryCompiler):
         else:
             return self.default_to_pandas(pandas.DataFrame.merge, right, **kwargs)
 
-    def take_2d(self, index=None, columns=None):
+    def take_2d_positional(self, index=None, columns=None):
         return self.__constructor__(
             self._modin_frame.take_2d_labels_or_positional(
                 row_positions=index, col_positions=columns
@@ -509,7 +510,11 @@ class DFAlgQueryCompiler(BaseQueryCompiler):
         if self._modin_frame._has_unsupported_data:
             default_axis_setter(1)(self, columns)
         else:
-            self._modin_frame = self._modin_frame._set_columns(columns)
+            try:
+                self._modin_frame = self._modin_frame._set_columns(columns)
+            except NotImplementedError:
+                default_axis_setter(1)(self, columns)
+                self._modin_frame._has_unsupported_data = True
 
     def fillna(
         self,
@@ -550,22 +555,30 @@ class DFAlgQueryCompiler(BaseQueryCompiler):
         )
         return self.__constructor__(new_modin_frame)
 
-    def drop(self, index=None, columns=None):
-        assert index is None, "Only column drop is supported"
+    def drop(self, index=None, columns=None, errors: str = "raise"):
+        if index is not None:
+            raise NotImplementedError("Row drop")
+        if errors != "raise":
+            raise NotImplementedError(
+                "This lazy query compiler will always "
+                + "raise an error on invalid columns."
+            )
         return self.__constructor__(
             self._modin_frame.take_2d_labels_or_positional(
                 row_labels=index, col_labels=self.columns.drop(columns)
             )
         )
 
-    def dropna(self, axis=0, how="any", thresh=None, subset=None):
-        if thresh is not None or axis != 0:
+    def dropna(self, axis=0, how=no_default, thresh=no_default, subset=None):
+        if thresh is not no_default or axis != 0:
             raise NotImplementedError(
                 "HDK's dropna does not support 'thresh' and 'axis' parameters."
             )
 
         if subset is None:
             subset = self.columns
+        if how is no_default:
+            how = "any"
         return self.__constructor__(
             self._modin_frame.dropna(subset=subset, how=how),
             shape_hint=self._shape_hint,
@@ -680,9 +693,15 @@ class DFAlgQueryCompiler(BaseQueryCompiler):
             self._modin_frame.reset_index(drop), shape_hint=shape_hint
         )
 
-    def astype(self, col_dtypes, **kwargs):
+    def astype(self, col_dtypes, errors: str = "raise"):
+        if errors != "raise":
+            raise NotImplementedError(
+                "This lazy query compiler will always "
+                + "raise an error on invalid type keys."
+            )
         return self.__constructor__(
-            self._modin_frame.astype(col_dtypes), self._shape_hint
+            self._modin_frame.astype(col_dtypes),
+            self._shape_hint,
         )
 
     def setitem(self, axis, key, value):

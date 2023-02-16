@@ -17,6 +17,7 @@ import io
 import os
 
 import pandas
+from pandas.io.common import get_handle
 
 from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
 from modin.core.execution.ray.generic.io import RayIO
@@ -29,7 +30,6 @@ from modin.core.io import (
     SQLDispatcher,
     ExcelDispatcher,
 )
-from modin._compat.core.pd_common import get_handle as pd_get_handle
 from modin.core.storage_formats.pandas.parsers import (
     PandasCSVParser,
     PandasFWFParser,
@@ -205,7 +205,7 @@ class PandasOnRayIO(RayIO):
             RayWrapper.materialize(signals.wait.remote(partition_idx))
 
             # preparing to write data from the buffer to a file
-            with pd_get_handle(
+            with get_handle(
                 path_or_buf,
                 # in case when using URL in implicit text mode
                 # pandas try to open `path_or_buf` in binary mode
@@ -304,6 +304,8 @@ class PandasOnRayIO(RayIO):
             df.to_parquet(**kwargs)
             return pandas.DataFrame()
 
+        # Ensure that the metadata is synchronized
+        qc._modin_frame._propagate_index_objs(axis=None)
         result = qc._modin_frame._partition_mgr_cls.map_axis_partitions(
             axis=1,
             partitions=qc._modin_frame._partitions,

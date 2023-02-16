@@ -21,6 +21,7 @@ from modin.core.dataframe.base.interchange.dataframe_protocol.dataframe import (
 from modin.experimental.core.storage_formats.hdk.query_compiler import (
     DFAlgQueryCompiler,
 )
+from .utils import LazyProxyCategoricalDtype
 from ..partitioning.partition_manager import HdkOnNativeDataframePartitionManager
 
 from pandas.core.indexes.api import ensure_index, Index, MultiIndex, RangeIndex
@@ -185,6 +186,7 @@ class HdkOnNativeDataframe(PandasDataframe):
         assert len(dtypes) == len(
             self._table_cols
         ), f"unaligned dtypes ({dtypes}) and table columns ({self._table_cols})"
+
         if isinstance(dtypes, list):
             if self._index_cols is not None:
                 # Table stores both index and data columns but those are accessed
@@ -214,12 +216,17 @@ class HdkOnNativeDataframe(PandasDataframe):
         if self._has_arrow_table() and self._partitions.size > 0:
             assert self._partitions.size == 1
             table = self._partitions[0][0].get()
-            if table.column_names[0] != f"F_{self._table_cols[0]}":
-                new_names = [f"F_{col}" for col in table.column_names]
-                new_table = table.rename_columns(new_names)
+            column_names = table.column_names
+            if len(table) > 0 and column_names[0] != f"F_{self._table_cols[0]}":
+                column_names = [f"F_{col}" for col in column_names]
+                table = table.rename_columns(column_names)
                 self._partitions[0][
                     0
-                ] = self._partition_mgr_cls._partition_class.put_arrow(new_table)
+                ] = self._partition_mgr_cls._partition_class.put_arrow(table)
+
+            for i, t in enumerate(dtypes):
+                if isinstance(t, LazyProxyCategoricalDtype):
+                    dtypes[i] = t._new(table, column_names[i])
 
         self._uses_rowid = uses_rowid
         self._force_execution_mode = force_execution_mode
@@ -323,7 +330,11 @@ class HdkOnNativeDataframe(PandasDataframe):
                 new_columns = base.columns[col_positions]
             exprs = self._index_exprs()
             for col in new_columns:
-                exprs[col] = base.ref(col)
+                expr = base.ref(col)
+                if exprs.setdefault(col, expr) is not expr:
+                    raise NotImplementedError(
+                        "duplicate column names are not supported"
+                    )
             dtypes = self._dtypes_for_exprs(exprs)
             base = self.__constructor__(
                 columns=new_columns,
@@ -359,7 +370,7 @@ class HdkOnNativeDataframe(PandasDataframe):
         """
         if not isinstance(self._op, FrameNode):
             return False
-        return all(p.arrow_table for p in self._partitions.flatten())
+        return all(p.arrow_table is not None for p in self._partitions.flatten())
 
     def _dtypes_for_cols(self, new_index, new_columns):
         """
@@ -2030,7 +2041,9 @@ class HdkOnNativeDataframe(PandasDataframe):
         """
         exprs = self._index_exprs()
         for old, new in zip(self.columns, new_columns):
-            exprs[new] = self.ref(old)
+            expr = self.ref(old)
+            if exprs.setdefault(new, expr) is not expr:
+                raise NotImplementedError("duplicate column names are not supported")
         return self.__constructor__(
             columns=new_columns,
             dtypes=self._dtypes.tolist(),
@@ -2379,18 +2392,30 @@ class HdkOnNativeDataframe(PandasDataframe):
         """
         new_index = df.index
         new_columns = df.columns
+
+        if isinstance(new_columns, MultiIndex):
+            # MultiIndex columns are not supported by the HDK backend.
+            # We just print this warning here and fall back to pandas.
+            index_cols = None
+            ErrorMessage.single_warning(
+                "MultiIndex columns are not currently supported by the HDK backend."
+            )
         # If there is non-trivial index, we put it into columns.
+        # If the index is trivial, but there are no columns, we put
+        # it into columns either because, otherwise, we don't know
+        # the number of rows and, thus, unable to restore the index.
         # That's what we usually have for arrow tables and execution
         # result. Unnamed index is renamed to __index__. Also all
-        # columns get 'F_' prefix to handle names unsupported in
-        # HDK.
-        if cls._is_trivial_index(df.index):
+        # columns get 'F_' prefix to handle names unsupported in HDK.
+        elif len(new_index) == 0 or (
+            len(new_columns) != 0 and cls._is_trivial_index(new_index)
+        ):
             index_cols = None
         else:
-            orig_index_names = df.index.names
+            orig_index_names = new_index.names
             orig_df = df
 
-            index_cols = cls._mangle_index_names(df.index.names)
+            index_cols = cls._mangle_index_names(new_index.names)
             df.index.names = index_cols
             df = df.reset_index()
 
@@ -2490,10 +2515,13 @@ class HdkOnNativeDataframe(PandasDataframe):
             new_columns = pd.Index(data=at.column_names, dtype="O")
             new_index = pd.RangeIndex(at.num_rows)
 
-        new_dtypes = pd.Series(
-            [cls._arrow_type_to_dtype(col.type) for col in at.columns],
-            index=at.column_names,
-        )
+        new_dtypes = []
+
+        for col in at.columns:
+            if pyarrow.types.is_dictionary(col.type):
+                new_dtypes.append(LazyProxyCategoricalDtype(at, col._name))
+            else:
+                new_dtypes.append(cls._arrow_type_to_dtype(col.type))
 
         if len(unsupported_cols) > 0:
             ErrorMessage.single_warning(
@@ -2507,7 +2535,7 @@ class HdkOnNativeDataframe(PandasDataframe):
             columns=new_columns,
             row_lengths=new_lengths,
             column_widths=new_widths,
-            dtypes=new_dtypes,
+            dtypes=pd.Series(data=new_dtypes, index=at.column_names),
             index_cols=index_cols,
             has_unsupported_data=len(unsupported_cols) > 0,
         )
@@ -2530,11 +2558,11 @@ class HdkOnNativeDataframe(PandasDataframe):
             return True
         if isinstance(index, pd.RangeIndex):
             return index.start == 0 and index.step == 1
-        if not isinstance(index, pd.Int64Index):
+        if not (isinstance(index, pd.Index) and index.dtype == np.int64):
             return False
         return (
             index.is_monotonic_increasing
-            and index.unique
-            and index.min == 0
-            and index.max == len(index) - 1
+            and index.is_unique
+            and index.min() == 0
+            and index.max() == len(index) - 1
         )

@@ -11,6 +11,9 @@
 # ANY KIND, either express or implied. See the License for the specific language
 # governing permissions and limitations under the License.
 
+# We turn off mypy type checks in this file because it's not imported anywhere
+# type: ignore
+
 import os
 import sys
 import pytest
@@ -42,7 +45,12 @@ modin.utils._make_api_url = _saving_make_api_url
 
 import modin  # noqa: E402
 import modin.config  # noqa: E402
-from modin.config import IsExperimental, TestRayClient  # noqa: E402
+from modin.config import (  # noqa: E402
+    NPartitions,
+    MinPartitionSize,
+    IsExperimental,
+    TestRayClient,
+)
 import uuid  # noqa: E402
 
 from modin.core.storage_formats import (  # noqa: E402
@@ -80,6 +88,7 @@ def pytest_addoption(parser):
         "--extra-test-parameters",
         action="store_true",
         help="activate extra test parameter combinations",
+        default=False,
     )
 
 
@@ -306,10 +315,9 @@ def get_unique_base_execution():
 
 
 def pytest_configure(config):
-    if config.option.extra_test_parameters is not None:
-        import modin.pandas.test.utils as utils
+    import modin.pandas.test.utils as utils
 
-        utils.extra_test_parameters = config.option.extra_test_parameters
+    utils.extra_test_parameters = config.getoption("--extra-test-parameters")
 
     execution = config.option.execution
 
@@ -421,7 +429,6 @@ def create_fixture(file_type):
 
 
 for file_type in ("json", "html", "excel", "feather", "stata", "hdf", "pickle", "fwf"):
-
     fixture = create_fixture(file_type)
     fixture.__name__ = f"make_{file_type}_file"
     globals()[fixture.__name__] = pytest.fixture(fixture)
@@ -531,6 +538,22 @@ def TestReadGlobCSVFixture():
 @pytest.fixture
 def get_generated_doc_urls():
     return lambda: _generated_doc_urls
+
+
+@pytest.fixture
+def set_num_partitions(request):
+    old_num_partitions = NPartitions.get()
+    NPartitions.put(request.param)
+    yield
+    NPartitions.put(old_num_partitions)
+
+
+@pytest.fixture
+def set_min_partition_size(request):
+    old_min_partition_size = MinPartitionSize.get()
+    MinPartitionSize.put(request.param)
+    yield
+    MinPartitionSize.put(old_min_partition_size)
 
 
 ray_client_server = None

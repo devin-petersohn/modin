@@ -232,7 +232,7 @@ class HdkOnNativeIO(BaseIO, TextFileDispatcher):
         eng = str(engine).lower().strip()
         try:
             if eng in ["pandas", "c"]:
-                return cls._read(**mykwargs)
+                return super().read_csv(**mykwargs)
 
             cls._validate_read_csv_kwargs(mykwargs)
             use_modin_impl, error_message = cls._read_csv_check_support(
@@ -300,6 +300,26 @@ class HdkOnNativeIO(BaseIO, TextFileDispatcher):
                 convert_options=co,
             )
 
+            col_names = at.column_names
+            col_counts = {}
+            for name in col_names:
+                col_counts[name] = 1 if name in col_counts else 0
+
+            if len(col_names) != len(col_counts):
+                for i, name in enumerate(col_names):
+                    count = col_counts[name]
+                    if count != 0:
+                        if count == 1:
+                            col_counts[name] = 2
+                        else:
+                            new_name = f"{name}.{count - 1}"
+                            while new_name in col_counts:
+                                new_name = f"{name}.{count}"
+                                count += 1
+                            col_counts[name] = count + 1
+                            col_names[i] = new_name
+                at = at.rename_columns(col_names)
+
             return cls.from_arrow(at)
         except (
             pa.ArrowNotImplementedError,
@@ -311,7 +331,7 @@ class HdkOnNativeIO(BaseIO, TextFileDispatcher):
                 raise
 
             ErrorMessage.default_to_pandas("`read_csv`")
-            return cls._read(**mykwargs)
+            return super().read_csv(**mykwargs)
 
     @classmethod
     def _dtype_to_arrow(cls, dtype):
@@ -453,6 +473,9 @@ class HdkOnNativeIO(BaseIO, TextFileDispatcher):
                 raise ValueError(
                     f"Invalid file path or buffer object type: {type(filepath_or_buffer)}"
                 )
+
+        if read_csv_kwargs.get("skipfooter") and read_csv_kwargs.get("nrows"):
+            return (False, "Exception is raised by pandas itself")
 
         for arg, def_value in cls.read_csv_unsup_defaults.items():
             if read_csv_kwargs[arg] != def_value:

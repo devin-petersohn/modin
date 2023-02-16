@@ -18,8 +18,16 @@ import pyarrow
 import pytest
 import re
 
+from pandas._testing import ensure_clean
+
 from modin.config import StorageFormat
-from modin.pandas.test.utils import io_ops_bad_exc, default_to_pandas_ignore_string
+from modin.pandas.test.utils import (
+    io_ops_bad_exc,
+    default_to_pandas_ignore_string,
+    random_state,
+    test_data,
+)
+from modin.test.interchange.dataframe_protocol.hdk.utils import split_df_into_chunks
 from .utils import eval_io, ForceHdkImport, set_execution_mode, run_and_compare
 from pandas.core.dtypes.common import is_list_like
 
@@ -286,7 +294,6 @@ class TestCSV:
         parse_dates,
         names,
     ):
-
         parse_dates_unsupported = isinstance(parse_dates, dict) or (
             isinstance(parse_dates, list)
             and any(not isinstance(date, str) for date in parse_dates)
@@ -340,6 +347,32 @@ class TestCSV:
             filepath_or_buffer=pytest.csvs_names["test_read_csv_regular"],
             usecols=usecols,
         )
+
+    @pytest.mark.parametrize(
+        "cols",
+        [
+            "c1,c2,c3",
+            "c1,c1,c2",
+            "c1,c1,c1.1,c1.2,c1",
+            "c1,c1,c1,c1.1,c1.2,c1.3",
+            "c1.1,c1.2,c1.3,c1,c1,c1",
+            "c1.1,c1,c1.2,c1,c1.3,c1",
+            "c1,c1.1,c1,c1.2,c1,c1.3",
+            "c1,c1,c1.1,c1.1,c1.2,c2",
+            "c1,c1,c1.1,c1.1,c1.2,c1.2,c2",
+            "c1.1,c1.1,c1,c1,c1.2,c1.2,c2",
+            "c1.1,c1,c1.1,c1,c1.1,c1.2,c1.2,c2",
+        ],
+    )
+    def test_read_csv_duplicate_cols(self, cols):
+        def test(df, lib, **kwargs):
+            data = f"{cols}\n"
+            with ensure_clean(".csv") as fname:
+                with open(fname, "w") as f:
+                    f.write(data)
+                return lib.read_csv(fname)
+
+        run_and_compare(test, data={})
 
 
 class TestMasks:
@@ -442,20 +475,14 @@ class TestMultiIndex:
         eval_general(pd, pandas, applier)
 
     @pytest.mark.parametrize("is_multiindex", [True, False])
-    @pytest.mark.parametrize(
-        "column_names", [None, ["level1", None], ["level1", "level2"]]
-    )
-    def test_reset_index_multicolumns(self, is_multiindex, column_names):
+    def test_reset_index_multicolumns(self, is_multiindex):
         index = (
             pandas.MultiIndex.from_tuples(
                 [(i, j, k) for i in range(2) for j in range(3) for k in range(4)],
                 names=["l1", "l2", "l3"],
             )
             if is_multiindex
-            else pandas.Index(np.arange(len(self.data["a"])), name="index")
-        )
-        columns = pandas.MultiIndex.from_tuples(
-            [("a", "b"), ("b", "c")], names=column_names
+            else pandas.Index(np.arange(1, len(self.data["a"]) + 1), name="index")
         )
         data = np.array(list(self.data.values())).T
 
@@ -466,7 +493,7 @@ class TestMultiIndex:
         run_and_compare(
             fn=applier,
             data=data,
-            constructor_kwargs={"index": index, "columns": columns},
+            constructor_kwargs={"index": index},
         )
 
     def test_set_index_name(self):
@@ -492,6 +519,27 @@ class TestMultiIndex:
         )
 
         df_equals(pandas_df, modin_df)
+
+    def test_rename(self):
+        index = pandas.MultiIndex.from_tuples(
+            [("foo1", "bar1"), ("foo2", "bar2")], names=["foo", "bar"]
+        )
+        columns = pandas.MultiIndex.from_tuples(
+            [("fizz1", "buzz1"), ("fizz2", "buzz2")], names=["fizz", "buzz"]
+        )
+
+        def rename(df, **kwargs):
+            return df.rename(
+                index={"foo1": "foo3", "bar2": "bar3"},
+                columns={"fizz1": "fizz3", "buzz2": "buzz3"},
+            )
+
+        run_and_compare(
+            fn=rename,
+            data=[(0, 0), (1, 1)],
+            constructor_kwargs={"index": index, "columns": columns},
+            force_lazy=False,
+        )
 
 
 class TestFillna:
@@ -1193,12 +1241,11 @@ class TestAgg:
                 # At the end of reduce function it does inevitable `transpose`, which
                 # is defaulting to pandas. The following logic check that `transpose` is the only
                 # function that falling back to pandas in the reduce operation flow.
-                # Another warning comes from deprecated pandas.Int64Index usage.
                 with pytest.warns(UserWarning) as warns:
                     res = getattr(df, method)()
                 assert (
-                    len(warns) == 2
-                ), f"More than two warnings were arisen: len(warns) != 2 ({len(warns)} != 2)"
+                    len(warns) == 1
+                ), f"More than one warning was arisen: len(warns) != 1 ({len(warns)} != 1)"
                 message = warns[0].message.args[0]
                 assert (
                     re.match(r".*transpose.*defaulting to pandas", message) is not None
@@ -1702,9 +1749,6 @@ class TestBinaryOp:
 
         run_and_compare(filter, data=self.cmp_data)
 
-    @pytest.mark.xfail(
-        reason="Requires fix in OmniSci: https://github.com/intel-ai/omniscidb/pull/178"
-    )
     def test_filter_empty_result(self):
         def filter(df, **kwargs):
             return df[df.a < 0]
@@ -2011,6 +2055,40 @@ class TestBadData:
             with ForceHdkImport(md_df):
                 pass
 
+    def test_uint_serialization(self):
+        # Tests for CalciteSerializer.serialize_literal()
+        df = pd.DataFrame({"A": [np.nan, 1]})
+        assert (
+            df.fillna(np.uint8(np.iinfo(np.uint8).max)).sum()[0]
+            == np.iinfo(np.uint8).max + 1
+        )
+        assert (
+            df.fillna(np.uint16(np.iinfo(np.uint16).max)).sum()[0]
+            == np.iinfo(np.uint16).max + 1
+        )
+        assert (
+            df.fillna(np.uint32(np.iinfo(np.uint32).max)).sum()[0]
+            == np.iinfo(np.uint32).max + 1
+        )
+        # HDK represents 'uint64' as 'int64' internally due to a lack of support
+        # for unsigned ints, that's why using 'int64.max' here
+        assert (
+            df.fillna(np.uint64(np.iinfo(np.int64).max - 1)).sum()[0]
+            == np.iinfo(np.int64).max
+        )
+
+        # Tests for CalciteSerializer.serialize_dtype()
+        df = pd.DataFrame({"A": [np.iinfo(np.uint8).max, 1]})
+        assert df.astype(np.uint8).sum()[0] == np.iinfo(np.uint8).max + 1
+        df = pd.DataFrame({"A": [np.iinfo(np.uint16).max, 1]})
+        assert df.astype(np.uint16).sum()[0] == np.iinfo(np.uint16).max + 1
+        df = pd.DataFrame({"A": [np.iinfo(np.uint32).max, 1]})
+        assert df.astype(np.uint32).sum()[0] == np.iinfo(np.uint32).max + 1
+        # HDK represents 'uint64' as 'int64' internally due to a lack of support
+        # for unsigned ints, that's why using 'int64.max' here
+        df = pd.DataFrame({"A": [np.iinfo(np.int64).max - 1, 1]})
+        assert df.astype(np.uint64).sum()[0] == np.iinfo(np.int64).max
+
 
 class TestDropna:
     data = {
@@ -2119,6 +2197,43 @@ class TestConstructor:
         df = pd.utils.from_arrow(at)
         assert df._query_compiler._shape_hint == "column"
 
+    def test_constructor_from_modin_series(self):
+        def construct_has_common_projection(lib, df, **kwargs):
+            return lib.DataFrame({"col1": df.iloc[:, 0], "col2": df.iloc[:, 1]})
+
+        def construct_no_common_projection(lib, df1, df2, **kwargs):
+            return lib.DataFrame(
+                {"col1": df1.iloc[:, 0], "col2": df2.iloc[:, 0], "col3": df1.iloc[:, 1]}
+            )
+
+        def construct_mixed_data(lib, df1, df2, **kwargs):
+            return lib.DataFrame(
+                {
+                    "col1": df1.iloc[:, 0],
+                    "col2": df2.iloc[:, 0],
+                    "col3": df1.iloc[:, 1],
+                    "col4": np.arange(len(df1)),
+                }
+            )
+
+        run_and_compare(
+            construct_has_common_projection, data={"a": [1, 2, 3, 4], "b": [3, 4, 5, 6]}
+        )
+        run_and_compare(
+            construct_no_common_projection,
+            data={"a": [1, 2, 3, 4], "b": [3, 4, 5, 6]},
+            data2={"a": [10, 20, 30, 40]},
+            # HDK doesn't support concatenation of frames that has no common projection
+            force_lazy=False,
+        )
+        run_and_compare(
+            construct_mixed_data,
+            data={"a": [1, 2, 3, 4], "b": [3, 4, 5, 6]},
+            data2={"a": [10, 20, 30, 40]},
+            # HDK doesn't support concatenation of frames that has no common projection
+            force_lazy=False,
+        )
+
 
 class TestArrowExecution:
     data1 = {"a": [1, 2, 3], "b": [3, 4, 5], "c": [6, 7, 8]}
@@ -2138,6 +2253,28 @@ class TestArrowExecution:
             data=self.data1,
             data2=self.data2,
             force_arrow_execute=True,
+        )
+
+    def test_drop_row(self):
+        def drop_row(df, **kwargs):
+            return df.drop(labels=1)
+
+        run_and_compare(
+            drop_row,
+            data=self.data1,
+            force_lazy=False,
+        )
+
+    def test_series_pop(self):
+        def pop(df, **kwargs):
+            col = df["a"]
+            col.pop(0)
+            return col
+
+        run_and_compare(
+            pop,
+            data=self.data1,
+            force_lazy=False,
         )
 
     def test_empty_transform(self):
@@ -2213,6 +2350,177 @@ class TestStr:
         mds = pd.Series(data[next(iter(data.keys()))])
         pds = pandas.Series(data[next(iter(data.keys()))])
         assert str(mds) == str(pds)
+
+    def test_no_cols(self):
+        def run_cols(df, **kwargs):
+            return df.loc[1]
+
+        run_and_compare(
+            fn=run_cols,
+            data=None,
+            constructor_kwargs={"index": range(5)},
+            force_lazy=False,
+        )
+
+
+class TestCompare:
+    def test_compare_float(self):
+        def run_compare(df1, df2, **kwargs):
+            return df1.compare(df2, align_axis="columns", keep_shape=False)
+
+        data1 = random_state.randn(100, 10)
+        data2 = random_state.randn(100, 10)
+        columns = list("abcdefghij")
+
+        run_and_compare(
+            run_compare,
+            data=data1,
+            data2=data2,
+            constructor_kwargs={"columns": columns},
+            force_lazy=False,
+        )
+
+
+class TestDuplicateColumns:
+    def test_init(self):
+        def init(df, **kwargs):
+            return df
+
+        data = [
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+            [9, 10, 11, 12],
+            [13, 14, 15, 16],
+            [17, 18, 19, 20],
+        ]
+        columns = ["c1", "c2", "c1", "c3"]
+        run_and_compare(
+            fn=init,
+            data=data,
+            force_lazy=False,
+            constructor_kwargs={"columns": columns},
+        )
+
+    def test_loc(self):
+        def loc(df, **kwargs):
+            return df.loc[:, ["col1", "col3", "col3"]]
+
+        run_and_compare(
+            fn=loc,
+            data=test_data_values[0],
+            force_lazy=False,
+        )
+
+    def test_set_columns(self):
+        def set_cols(df, **kwargs):
+            df.columns = ["col1", "col3", "col3"]
+            return df
+
+        run_and_compare(
+            fn=set_cols,
+            data=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            force_lazy=False,
+        )
+
+    def test_set_axis(self):
+        def set_axis(df, **kwargs):
+            sort_index = df.axes[1]
+            labels = [
+                np.nan if i % 2 == 0 else sort_index[i] for i in range(len(sort_index))
+            ]
+            inplace = kwargs["set_axis_inplace"]
+            res = df.set_axis(labels, axis=1, inplace=inplace)
+            return df if inplace else res
+
+        run_and_compare(
+            fn=set_axis,
+            data=test_data["float_nan_data"],
+            force_lazy=False,
+            set_axis_inplace=True,
+        )
+        run_and_compare(
+            fn=set_axis,
+            data=test_data["float_nan_data"],
+            force_lazy=False,
+            set_axis_inplace=False,
+        )
+
+
+class TestFromArrow:
+    def test_dict(self):
+        indices = pyarrow.array([0, 1, 0, 1, 2, 0, None, 2])
+        dictionary = pyarrow.array(["first", "second", "third"])
+        dict_array = pyarrow.DictionaryArray.from_arrays(indices, dictionary)
+        at = pyarrow.table(
+            {"col1": dict_array, "col2": [1, 2, 3, 4, 5, 6, 7, 8], "col3": dict_array}
+        )
+        pdf = at.to_pandas()
+        nchunks = 3
+        chunks = split_df_into_chunks(pdf, nchunks)
+        at = pyarrow.concat_tables([pyarrow.Table.from_pandas(c) for c in chunks])
+        mdf = from_arrow(at)
+        at = mdf._query_compiler._modin_frame._partitions[0][0].get()
+        assert len(at.column(0).chunks) == nchunks
+        df_equals(mdf, pdf)
+
+        mdt = mdf.dtypes[0]
+        pdt = pdf.dtypes[0]
+        assert mdt == "category"
+        assert isinstance(mdt, pandas.CategoricalDtype)
+        assert pandas.api.types.is_categorical_dtype(mdt)
+        assert str(mdt) == str(pdt)
+
+        # Make sure the lazy proxy dtype is not materialized yet.
+        assert type(mdt) != pandas.CategoricalDtype
+        assert mdt._table is not None
+        assert mdt._new(at, at.column(0)._name) is mdt
+        assert mdt._new(at, at.column(2)._name) is not mdt
+        assert type(mdt._new(at, at.column(2)._name)) != pandas.CategoricalDtype
+
+        assert mdt == pdt
+        assert pdt == mdt
+        assert repr(mdt) == repr(pdt)
+
+        # Should be materialized now
+        assert type(mdt._new(at, at.column(2)._name)) == pandas.CategoricalDtype
+
+
+class TestSparseArray:
+    def test_sparse_series(self):
+        data = pandas.arrays.SparseArray(np.array([3, 1, 2, 3, 4, np.nan]))
+        mds = pd.Series(data)
+        pds = pandas.Series(data)
+        df_equals(mds, pds)
+
+
+class TestEmpty:
+    def test_frame_insert(self):
+        def insert(df, **kwargs):
+            df["a"] = [1, 2, 3, 4, 5]
+            return df
+
+        run_and_compare(
+            insert,
+            data=None,
+        )
+        run_and_compare(
+            insert,
+            data=None,
+            constructor_kwargs={"index": ["a", "b", "c", "d", "e"]},
+        )
+        run_and_compare(
+            insert,
+            data=None,
+            constructor_kwargs={"columns": ["a", "b", "c", "d", "e"]},
+            # Do not force lazy since setitem() defaults to pandas
+            force_lazy=False,
+        )
+
+    def test_series_getitem(self):
+        df_equals(pd.Series([])[:30], pandas.Series([])[:30])
+
+    def test_series_to_pandas(self):
+        df_equals(pd.Series([])._to_pandas(), pandas.Series([]))
 
 
 if __name__ == "__main__":

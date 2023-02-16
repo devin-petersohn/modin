@@ -20,8 +20,10 @@ import warnings
 from packaging import version
 import secrets
 
+from pandas.util._decorators import doc  # type: ignore[attr-defined]
+
 from .pubsub import Parameter, _TYPE_PARAMS, ExactStr, ValueSource
-from typing import Optional
+from typing import Any, Optional
 
 
 class EnvironmentVariable(Parameter, type=str, abstract=True):
@@ -75,7 +77,14 @@ class Engine(EnvironmentVariable, type=str):
     """Distribution engine to run queries by."""
 
     varname = "MODIN_ENGINE"
-    choices = ("Ray", "Dask", "Python", "Native", "Client")
+    choices = ("Ray", "Dask", "Python", "Native", "Unidist", "Client")
+
+    NOINIT_ENGINES = {
+        "Python",
+        "Client",
+    }  # engines that don't require initialization, useful for unit tests
+
+    has_custom_engine = False
 
     @classmethod
     def _get_default(cls) -> str:
@@ -89,9 +98,12 @@ class Engine(EnvironmentVariable, type=str):
         from modin.utils import (
             MIN_RAY_VERSION,
             MIN_DASK_VERSION,
+            MIN_UNIDIST_VERSION,
         )
 
-        if IsDebug.get():
+        # If there's a custom engine, we don't need to check for any engine
+        # dependencies. Return the default "Python" engine.
+        if IsDebug.get() or cls.has_custom_engine:
             return "Python"
         try:
             import ray
@@ -131,10 +143,28 @@ class Engine(EnvironmentVariable, type=str):
             pass
         else:
             return "Native"
+        try:
+            import unidist
 
-        # If we can't import any other engines we should go ahead and default to Python being
-        # the default backend engine.
-        return "Python"
+        except ImportError:
+            pass
+        else:
+            if version.parse(unidist.__version__) < MIN_UNIDIST_VERSION:
+                raise ImportError(
+                    "Please `pip install unidist[mpi]` to install compatible unidist on MPI "
+                    + "version "
+                    + f"(>={MIN_UNIDIST_VERSION})."
+                )
+            return "Unidist"
+        return "Client"
+
+    @classmethod
+    @doc(Parameter.add_option.__doc__)
+    def add_option(cls, choice: Any) -> Any:
+        choice = super().add_option(choice)
+        cls.NOINIT_ENGINES.add(choice)
+        cls.has_custom_engine = True
+        return choice
 
 
 class StorageFormat(EnvironmentVariable, type=str):
@@ -479,7 +509,7 @@ class PersistentPickle(EnvironmentVariable, type=bool):
 
 class HdkLaunchParameters(EnvironmentVariable, type=dict):
     """
-    Additional command line options for the OmniSci engine.
+    Additional command line options for the HDK engine.
 
     Please visit OmniSci documentation for the description of available parameters:
     https://docs.omnisci.com/installation-and-configuration/config-parameters#configuration-parameters-for-omniscidb
@@ -511,8 +541,20 @@ class HdkLaunchParameters(EnvironmentVariable, type=dict):
             OmnisciLaunchParameters.varname in os.environ
             and HdkLaunchParameters.varname not in os.environ
         ):
-            return OmnisciLaunchParameters.get()
+            return OmnisciLaunchParameters._get()
+        else:
+            return HdkLaunchParameters._get()
 
+    @classmethod
+    def _get(cls) -> dict:
+        """
+        Get the resulted command-line options.
+
+        Returns
+        -------
+        dict
+            Decoded and verified config value.
+        """
         custom_parameters = super().get()
         result = cls.default.copy()
         result.update(
@@ -582,6 +624,13 @@ class TestReadFromPostgres(EnvironmentVariable, type=bool):
     """Set to true to test reading from Postgres."""
 
     varname = "MODIN_TEST_READ_FROM_POSTGRES"
+    default = False
+
+
+class ExperimentalNumPyAPI(EnvironmentVariable, type=bool):
+    """Set to true to use Modin's experimental NumPy API."""
+
+    varname = "MODIN_EXPERIMENTAL_NUMPY_API"
     default = False
 
 

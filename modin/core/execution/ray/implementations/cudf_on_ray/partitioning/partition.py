@@ -22,6 +22,7 @@ import cupy as cp
 from modin.core.dataframe.pandas.partitioning.partition import PandasDataframePartition
 from pandas.core.dtypes.common import is_list_like
 from modin.core.execution.ray.common import RayWrapper
+from modin.core.execution.ray.common.utils import ObjectIDType
 
 
 class cuDFOnRayDataframePartition(PandasDataframePartition):
@@ -41,18 +42,6 @@ class cuDFOnRayDataframePartition(PandasDataframePartition):
         Width or reference to it of wrapped ``pandas.DataFrame``.
     """
 
-    @property
-    def __constructor__(self):
-        """
-        Create a new instance of this object.
-
-        Returns
-        -------
-        cuDFOnRayDataframePartition
-            New instance of cuDF partition.
-        """
-        return type(self)
-
     def __init__(self, gpu_manager, key, length=None, width=None):
         self.gpu_manager = gpu_manager
         self.key = key
@@ -69,7 +58,7 @@ class cuDFOnRayDataframePartition(PandasDataframePartition):
             A copy of this object.
         """
         # Shallow copy.
-        return cuDFOnRayDataframePartition(
+        return self.__constructor__(
             self.gpu_manager, self.key, self._length_cache, self._width_cache
         )
 
@@ -165,7 +154,7 @@ class cuDFOnRayDataframePartition(PandasDataframePartition):
         -----
         We eagerly schedule the apply `func` and produce a new ``cuDFOnRayDataframePartition``.
         """
-        return cuDFOnRayDataframePartition(
+        return self.__constructor__(
             self.gpu_manager,
             self.apply(func, *args, **kwargs),
             length=length,
@@ -189,9 +178,16 @@ class cuDFOnRayDataframePartition(PandasDataframePartition):
         """
         return ray.put(func)
 
-    def length(self):
+    def length(self, materialize=True):
         """
         Get the length of the object wrapped by this partition.
+
+        Parameters
+        ----------
+        materialize : bool, default: True
+            Whether to forcibly materialize the result into an integer. If ``False``
+            was specified, may return a future of the result if it hasn't been
+            materialized yet.
 
         Returns
         -------
@@ -200,11 +196,21 @@ class cuDFOnRayDataframePartition(PandasDataframePartition):
         """
         if self._length_cache:
             return self._length_cache
-        return self.gpu_manager.length.remote(self.get_key())
+        self._length_cache = self.gpu_manager.length.remote(self.get_key())
+        if isinstance(self._length_cache, ObjectIDType) and materialize:
+            self._length_cache = RayWrapper.materialize(self._length_cache)
+        return self._length_cache
 
-    def width(self):
+    def width(self, materialize=True):
         """
         Get the width of the object wrapped by this partition.
+
+        Parameters
+        ----------
+        materialize : bool, default: True
+            Whether to forcibly materialize the result into an integer. If ``False``
+            was specified, may return a future of the result if it hasn't been
+            materialized yet.
 
         Returns
         -------
@@ -213,7 +219,10 @@ class cuDFOnRayDataframePartition(PandasDataframePartition):
         """
         if self._width_cache:
             return self._width_cache
-        return self.gpu_manager.width.remote(self.get_key())
+        self._width_cache = self.gpu_manager.width.remote(self.get_key())
+        if isinstance(self._width_cache, ObjectIDType) and materialize:
+            self._width_cache = RayWrapper.materialize(self._width_cache)
+        return self._width_cache
 
     def mask(self, row_labels, col_labels):
         """

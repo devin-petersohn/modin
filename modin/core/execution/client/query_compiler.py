@@ -407,7 +407,7 @@ class ClientQueryCompiler(BaseQueryCompiler):
         )
 
     # take_2d is special because service still uses `view`, but modin calls `take_2d`
-    def take_2d(self, index=None, columns=None):
+    def take_2d_positional(self, index=None, columns=None):
         return self.__constructor__(self._service.view(self._id, index, columns))
 
     # The service should define the same default of numeric=False, but it doesn't,
@@ -416,6 +416,11 @@ class ClientQueryCompiler(BaseQueryCompiler):
     def getitem_column_array(self, key, numeric=False):
         return self.__constructor__(
             self._service.getitem_column_array(self._id, key, numeric)
+        )
+
+    def getitem_row_labels_array(self, key):
+        return self.__constructor__(
+            self._service.getitem_row_labels_array(self._id, key)
         )
 
     # BUG: cumulative functions are wrong in service. need special treatment here.
