@@ -120,8 +120,7 @@ class ClientIO(BaseIO):
             raise ConnectionError(
                 "Missing server connection, did you initialize the connection?"
             )
-        if len(cls._data_conn) == 0:
-            cls._data_conn.append(con)
+        cls._data_conn.append(con)
         return cls.query_compiler_cls(cls._server_conn.read_sql(sql, con, **kwargs))
 
     @classmethod
