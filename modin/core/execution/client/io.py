@@ -40,7 +40,6 @@ class ClientIO(BaseIO):
                 raise PonderReinitError("Ponder Connection already initialized.")
         else:
             cls._server_conn = conn
-            cls_data_conn = []
 
     @classmethod
     def add_data_connection(cls, conn):
