@@ -83,6 +83,8 @@ class ClientIO(BaseIO):
             raise ConnectionError(
                 "Missing server connection, did you initialize the connection?"
             )
+        # with pushdown - the csv file has to move to some database.  Assume for now
+        # that it is the first database the user connected to.
         return cls.query_compiler_cls(
             cls._server_conn.read_csv(cls._data_conn[0], filepath_or_buffer, **kwargs)
         )
