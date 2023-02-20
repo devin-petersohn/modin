@@ -122,7 +122,6 @@ class ClientIO(BaseIO):
             )
         if len(cls._data_conn) == 0:
             cls._data_conn.append(con)
-        breakpoint()
         return cls.query_compiler_cls(cls._server_conn.read_sql(sql, con, **kwargs))
 
     @classmethod
