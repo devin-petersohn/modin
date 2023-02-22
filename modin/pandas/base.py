@@ -2049,7 +2049,6 @@ class BasePandasDataset(BasePandasDatasetCompat):
         if hasattr(source, "name") and hasattr(destination, "name"):
             destination.name = source.name
         if hasattr(source, "names") and hasattr(destination, "names"):
-            breakpoint()
             destination.names = source.names
         return destination
 
@@ -2084,7 +2083,7 @@ class BasePandasDataset(BasePandasDatasetCompat):
         new_query_compiler = None
         if index is not None:
             # TODO: see how/whether to detect modin.pandas index in a better way
-            if hasattr(index, "name") or hasattr(index, "names"):
+            if hasattr(index, "_summary"):
                 index = self._copy_index_metadata(source=self.index, destination=index)
             new_query_compiler = self._query_compiler.reindex(
                 axis=0, labels=index, **kwargs
