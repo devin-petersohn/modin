@@ -2082,7 +2082,13 @@ class BasePandasDataset(BasePandasDatasetCompat):
         """
         new_query_compiler = None
         if index is not None:
-            # TODO: see how/whether to detect modin.pandas index in a better way
+            # TODO(REFACTOR): see how/whether to detect modin.pandas index in a better
+            # way. Right now in upsteram modin we always try to convert the index to a
+            # pandas.Index. That is not desirable for large indexes that we store in the
+            # service.
+            # Use duck typing to detect modin.pandas indexes, which are rpyc netrefs.
+            # pandas.Index and modin.pandas.Index and not much else has an attribute
+            # called "_summary".
             if hasattr(index, "_summary"):
                 index = self._copy_index_metadata(source=self.index, destination=index)
             new_query_compiler = self._query_compiler.reindex(
