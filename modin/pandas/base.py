@@ -2049,6 +2049,7 @@ class BasePandasDataset(BasePandasDatasetCompat):
         if hasattr(source, "name") and hasattr(destination, "name"):
             destination.name = source.name
         if hasattr(source, "names") and hasattr(destination, "names"):
+            breakpoint()
             destination.names = source.names
         return destination
 
@@ -2082,14 +2083,12 @@ class BasePandasDataset(BasePandasDatasetCompat):
         """
         new_query_compiler = None
         if index is not None:
-            if not isinstance(index, pandas.Index):
-                index = self._copy_index_metadata(
-                    source=self.index, destination=self._ensure_index(index, axis=0)
-                )
-            if not index.equals(self.index):
-                new_query_compiler = self._query_compiler.reindex(
-                    axis=0, labels=index, **kwargs
-                )
+            # TODO: see how/whether to detect modin.pandas index in a better way
+            if hasattr(index, "name") or hasattr(index, "names"):
+                index = self._copy_index_metadata(source=self.index, destination=index)
+            new_query_compiler = self._query_compiler.reindex(
+                axis=0, labels=index, **kwargs
+            )
         if new_query_compiler is None:
             new_query_compiler = self._query_compiler
         final_query_compiler = None
