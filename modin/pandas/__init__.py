@@ -27,6 +27,8 @@ if (
         + f" Modin ({__pandas_version__}.X). This may cause undesired side effects!"
     )
 
+_PD_EXTENSIONS_ = {}
+
 # to not pollute namespace
 del version
 
@@ -225,7 +227,13 @@ from .io import (
 from .plotting import Plotting as plotting
 from .series import Series
 
+
+def __getattr__(name):
+    return _PD_EXTENSIONS_.get(name, globals()[name])
+
+
 __all__ = [  # noqa: F405
+    "_PD_EXTENSIONS_",
     "DataFrame",
     "Series",
     "read_csv",
